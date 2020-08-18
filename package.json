@@ -1,0 +1,26 @@
+{
+  "name": "axion-contracts",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "npx truffle test",
+    "compile": "npx truffle compile --all"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rock-n-Block/axion-contracts.git"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Rock-n-Block/axion-contracts/issues"
+  },
+  "homepage": "https://github.com/Rock-n-Block/axion-contracts#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.0.1",
+    "bn.js": "^5.1.3",
+    "chai": "^4.2.0",
+    "chai-bn": "^0.2.1",
+    "solidity-coverage": "^0.7.9",
+    "truffle": "^5.1.40"
+  }
+}
