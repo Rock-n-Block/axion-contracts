@@ -63,20 +63,12 @@ contract Auction is IAuction, AccessControl {
         init_ = true;
     }
 
-    function getUserEthBalanceInAuction(uint256 auctionId, address account)
+    function auctionsOf_(address account)
         public
         view
-        returns (uint256)
+        returns (uint256[] memory)
     {
-        return auctionEthBalanceOf[auctionId][account].eth;
-    }
-
-    function getUserRefInAuction(uint256 auctionId, address account)
-        public
-        view
-        returns (address)
-    {
-        return auctionEthBalanceOf[auctionId][account].ref;
+        return auctionsOf[account];
     }
 
     function bet(uint256 deadline, address ref) external payable {

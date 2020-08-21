@@ -52,11 +52,6 @@ contract(
 
       // Deploy and init native swap
       nativeswap = await NativeSwap.new();
-      nativeswap.init_0(
-        new BN(DAY.toString(), 10),
-        swaptoken.address,
-        token.address
-      );
 
       // Deploy and init daily auction
       dailyauction = await Auction.new();
@@ -69,7 +64,13 @@ contract(
         nativeswap.address,
         foreignSwap
       );
-      nativeswap.init_1(dailyauction.address);
+
+      nativeswap.init(
+        new BN(DAY.toString(), 10),
+        swaptoken.address,
+        token.address,
+        dailyauction.address
+      );
 
       // Owners 1/1 native swap
       await swaptoken.approve(token.address, web3.utils.toWei("10000"), {
@@ -126,12 +127,9 @@ contract(
 
       const currentAuctionId = await dailyauction.currentAuctionId();
 
-      // Userc Auiction 0 ETH balance
+      // User Auiction 0 ETH balance
       expect(
-        await dailyauction.getUserEthBalanceInAuction(
-          currentAuctionId,
-          account1
-        )
+        (await dailyauction.auctionEthBalanceOf(currentAuctionId, account1)).eth
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("10"));
 
       // Recipient ETH balance 20%

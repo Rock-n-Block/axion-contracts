@@ -16,33 +16,27 @@ contract NativeSwap {
     address private mainToken;
     address private dailyAuction;
 
-    bool public init0;
-    bool public init1;
+    bool public init_;
 
     mapping(address => uint256) private swapTokenBalanceOf;
 
     constructor() public {
-        init0 = false;
-        init1 = false;
+        init_ = false;
     }
 
-    function init_0(
+    function init(
         uint256 _stepTimestamp,
         address _swapToken,
-        address _mainToken
+        address _mainToken,
+        address _dailyAuction
     ) external {
-        require(!init0, "init0 is active");
+        require(!init_, "init is active");
         stepTimestamp = _stepTimestamp;
         swapToken = _swapToken;
         mainToken = _mainToken;
-        init0 = true;
-    }
-
-    function init_1(address _dailyAuction) external {
-        require(!init1, "init0 is active");
         dailyAuction = _dailyAuction;
         start = now;
-        init1 = true;
+        init_ = true;
     }
 
     function getStart() external view returns (uint256) {
