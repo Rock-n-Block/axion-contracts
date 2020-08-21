@@ -37,15 +37,15 @@ contract(
 
       // Deploy and init native swap
       nativeswap = await NativeSwap.new();
-      nativeswap.init_0(
-        new BN(DAY.toString(), 10),
-        swaptoken.address,
-        token.address
-      );
 
       dailyauction = await AuctionMock.new();
 
-      nativeswap.init_1(dailyauction.address);
+      nativeswap.init(
+        new BN(DAY.toString(), 10),
+        swaptoken.address,
+        token.address,
+        dailyauction.address
+      );
 
       // Init token
       token.init(

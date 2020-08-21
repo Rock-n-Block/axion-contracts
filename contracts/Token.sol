@@ -101,7 +101,7 @@ contract Token is IToken, ERC20, AccessControl {
     }
 
     // Helpers
-    function getNow() external returns (uint256) {
+    function getNow() external view returns (uint256) {
         return now;
     }
 }

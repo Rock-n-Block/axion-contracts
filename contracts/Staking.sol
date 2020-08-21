@@ -64,12 +64,12 @@ contract Staking is AccessControl {
         init_ = true;
     }
 
-    function getAccountSessionsLen(address account)
+    function sessionsOf_(address account)
         external
         view
-        returns (uint256)
+        returns (uint256[] memory)
     {
-        return sessionsOf[account].length;
+        return sessionsOf[account];
     }
 
     function stake(uint256 amount, uint256 stakingDays) external {
