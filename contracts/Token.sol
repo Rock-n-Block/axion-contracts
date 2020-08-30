@@ -48,6 +48,7 @@ contract Token is IToken, ERC20, AccessControl {
             _setupRole(MINTER_ROLE, instances[index]);
         }
         renounceRole(SETTER_ROLE, _msgSender());
+        swapIsOver = true;
     }
 
     function getMinterRole() external pure returns (bytes32) {
@@ -98,6 +99,10 @@ contract Token is IToken, ERC20, AccessControl {
 
     function mint(address to, uint256 amount) external override onlyMinter {
         _mint(to, amount);
+    }
+
+    function burn(address from, uint256 amount) external override onlyMinter {
+        _burn(from, amount);
     }
 
     // Helpers

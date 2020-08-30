@@ -3,5 +3,7 @@
 pragma solidity ^0.6.0;
 
 interface IAuction {
-    function callIncomeTokensTrigger(uint256 incomeAmountToken) external;
+    function callIncomeDailyTokensTrigger(uint256 amount) external;
+
+    function callIncomeWeeklyTokensTrigger(uint256 amount) external;
 }

@@ -89,8 +89,20 @@ contract NativeSwap {
         require(amount > 0, "swapNativeToken: amount == 0");
         swapTokenBalanceOf[msg.sender] = 0;
         IToken(mainToken).mint(dailyAuction, deltaPenalty);
-        IAuction(dailyAuction).callIncomeTokensTrigger(deltaPenalty);
+        IAuction(dailyAuction).callIncomeDailyTokensTrigger(deltaPenalty);
         IToken(mainToken).mint(msg.sender, amountOut);
+    }
+
+    function readSwapNativeToken(address account)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        uint256 amount = swapTokenBalanceOf[account];
+        if (amount == 0) return (0, 0);
+        uint256 deltaPenalty = _calculateDeltaPenalty(amount);
+        uint256 amountOut = amount.sub(deltaPenalty);
+        return (amountOut, deltaPenalty);
     }
 
     function _calculateDeltaPenalty(uint256 amount)
@@ -99,6 +111,7 @@ contract NativeSwap {
         returns (uint256)
     {
         uint256 stepsFromStart = (now.sub(start)).div(stepTimestamp);
+        if (stepsFromStart > 350) return amount;
         return amount.mul(stepsFromStart).div(350);
     }
 }
