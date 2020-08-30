@@ -12,6 +12,7 @@ import "./interfaces/IAuction.sol";
 contract Auction is IAuction, AccessControl {
     using SafeMath for uint256;
 
+    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant CALLER_ROLE = keccak256("CALLER_ROLE");
 
     struct AuctionReserves {
@@ -26,17 +27,34 @@ contract Auction is IAuction, AccessControl {
 
     mapping(uint256 => AuctionReserves) public reservesOf;
     mapping(address => uint256[]) public auctionsOf;
+    mapping(uint256 => mapping(address => UserBet)) public auctionBetOf;
     mapping(uint256 => mapping(address => bool)) public existAuctionsOf;
-    mapping(uint256 => mapping(address => UserBet)) public auctionEthBalanceOf;
 
     uint256 public start;
     uint256 public currentAuctionId;
     uint256 public stepTimestamp;
+    uint256 public uniswapPercent;
     address public mainToken;
     address public staking;
     address payable public uniswap;
     address payable public recipient;
     bool public init_;
+
+    modifier onlyCaller() {
+        require(
+            hasRole(CALLER_ROLE, _msgSender()),
+            "Caller is not a caller role"
+        );
+        _;
+    }
+
+    modifier onlyManager() {
+        require(
+            hasRole(MANAGER_ROLE, _msgSender()),
+            "Caller is not a caller role"
+        );
+        _;
+    }
 
     constructor() public {
         init_ = false;
@@ -44,6 +62,7 @@ contract Auction is IAuction, AccessControl {
 
     function init(
         uint256 _stepTimestamp,
+        address _manager,
         address _mainToken,
         address _staking,
         address payable _uniswap,
@@ -52,10 +71,13 @@ contract Auction is IAuction, AccessControl {
         address _foreignSwap
     ) external {
         require(!init_, "init is active");
+        _setupRole(MANAGER_ROLE, _manager);
         _setupRole(CALLER_ROLE, _nativeSwap);
         _setupRole(CALLER_ROLE, _foreignSwap);
+        _setupRole(CALLER_ROLE, _staking);
         start = now;
         stepTimestamp = _stepTimestamp;
+        uniswapPercent = 10;
         mainToken = _mainToken;
         staking = _staking;
         uniswap = _uniswap;
@@ -69,6 +91,10 @@ contract Auction is IAuction, AccessControl {
         returns (uint256[] memory)
     {
         return auctionsOf[account];
+    }
+
+    function setUniswapPercent(uint256 percent) external onlyManager {
+        uniswapPercent = percent;
     }
 
     function bet(uint256 deadline, address ref) external payable {
@@ -85,10 +111,10 @@ contract Auction is IAuction, AccessControl {
 
         currentAuctionId = stepsFromStart;
 
-        auctionEthBalanceOf[stepsFromStart][_msgSender()].ref = ref;
+        auctionBetOf[stepsFromStart][_msgSender()].ref = ref;
 
-        auctionEthBalanceOf[stepsFromStart][_msgSender()]
-            .eth = auctionEthBalanceOf[stepsFromStart][_msgSender()].eth.add(
+        auctionBetOf[stepsFromStart][_msgSender()]
+            .eth = auctionBetOf[stepsFromStart][_msgSender()].eth.add(
             msg.value
         );
 
@@ -109,20 +135,16 @@ contract Auction is IAuction, AccessControl {
 
         require(stepsFromStart > auctionId, "auction is active");
 
-
-            uint256 auctionETHUserBalance
-         = auctionEthBalanceOf[auctionId][_msgSender()].eth;
+        uint256 auctionETHUserBalance = auctionBetOf[auctionId][_msgSender()]
+            .eth;
 
         require(auctionETHUserBalance > 0, "zero balance in auction");
 
         uint256 payout = _calculatePayout(auctionId, auctionETHUserBalance);
 
-        auctionEthBalanceOf[auctionId][_msgSender()].eth = 0;
+        auctionBetOf[auctionId][_msgSender()].eth = 0;
 
-        if (
-            address(auctionEthBalanceOf[auctionId][_msgSender()].ref) ==
-            address(0)
-        ) {
+        if (address(auctionBetOf[auctionId][_msgSender()].ref) == address(0)) {
             IERC20(mainToken).transfer(_msgSender(), payout);
         } else {
             IERC20(mainToken).transfer(_msgSender(), payout);
@@ -135,41 +157,80 @@ contract Auction is IAuction, AccessControl {
             IToken(mainToken).mint(_msgSender(), toUserMintAmount);
 
             IToken(mainToken).mint(
-                auctionEthBalanceOf[auctionId][_msgSender()].ref,
+                auctionBetOf[auctionId][_msgSender()].ref,
                 toRefMintAmount
             );
         }
     }
 
-    function callIncomeTokensTrigger(uint256 incomeAmountToken)
+    function callIncomeDailyTokensTrigger(uint256 amount)
         external
         override
+        onlyCaller
     {
-        require(
-            hasRole(CALLER_ROLE, _msgSender()),
-            "Caller is not a caller role"
-        );
-
         uint256 stepsFromStart = calculateStepsFromStart();
 
         reservesOf[stepsFromStart].token = reservesOf[stepsFromStart].token.add(
-            incomeAmountToken
+            amount
         );
+    }
+
+    function callIncomeWeeklyTokensTrigger(uint256 amount)
+        external
+        override
+        onlyCaller
+    {
+        uint256 nearestWeeklyAuction = calculateNearestWeeklyAuction();
+
+        reservesOf[nearestWeeklyAuction]
+            .token = reservesOf[nearestWeeklyAuction].token.add(amount);
+    }
+
+    function calculateNearestWeeklyAuction() public view returns (uint256) {
+        uint256 stepsFromStart = calculateStepsFromStart();
+        return stepsFromStart.add(uint256(7).sub(stepsFromStart.mod(7)));
     }
 
     function calculateStepsFromStart() public view returns (uint256) {
         return now.sub(start).div(stepTimestamp);
     }
 
-    function _calculatePayout(uint256 auctionId, uint256 amountEth)
+    function _changePayoutWithUniswap(uint256 amount, uint256 payout)
         internal
         view
         returns (uint256)
     {
-        return
-            amountEth.mul(reservesOf[auctionId].token).div(
-                reservesOf[auctionId].eth
-            );
+        address[] memory path = new address[](2);
+
+        path[0] = IUniswapV2Router02(uniswap).WETH();
+        path[1] = mainToken;
+
+        uint256 uniswapPayout = IUniswapV2Router02(uniswap).getAmountsOut(
+            amount,
+            path
+        )[1];
+
+        uint256 uniswapPayoutWithPercent = uniswapPayout.add(
+            uniswapPayout.mul(uniswapPercent).div(100)
+        );
+
+        if (payout > uniswapPayoutWithPercent) {
+            return uniswapPayoutWithPercent;
+        } else {
+            return payout;
+        }
+    }
+
+    function _calculatePayout(uint256 auctionId, uint256 amount)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 payout = amount.mul(reservesOf[auctionId].token).div(
+            reservesOf[auctionId].eth
+        );
+
+        return _changePayoutWithUniswap(amount, payout);
     }
 
     function _calculateRecipientAndUniswapAmountsToSend()

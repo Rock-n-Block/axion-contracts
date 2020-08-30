@@ -6,9 +6,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./interfaces/IToken.sol";
+import "./interfaces/IAuction.sol";
+import "./interfaces/IStaking.sol";
 import "./interfaces/ISubBalances.sol";
 
-contract Staking is AccessControl {
+contract Staking is IStaking, AccessControl {
     using SafeMath for uint256;
 
     uint256 private _sessionsIds;
@@ -16,8 +18,6 @@ contract Staking is AccessControl {
     bytes32 public constant EXTERNAL_STAKER_ROLE = keccak256(
         "EXTERNAL_STAKER_ROLE"
     );
-
-    uint256 public delta;
 
     struct Payout {
         uint256 payout;
@@ -29,21 +29,30 @@ contract Staking is AccessControl {
         uint256 start;
         uint256 end;
         uint256 shares;
-        bool sessionIsActive;
     }
 
     address public mainToken;
+    address public auction;
     address public subBalances;
     uint256 public shareRate;
     uint256 public sharesTotalSupply;
     uint256 public lastMainTokenBalance;
     uint256 public nextPayoutCall;
-    uint256 public constant DAY = 86400;
+    uint256 public stepTimestamp;
+    uint256 public startContract;
     bool public init_;
 
     mapping(address => mapping(uint256 => Session)) public sessionDataOf;
     mapping(address => uint256[]) public sessionsOf;
     Payout[] public payouts;
+
+    modifier onlyExternalStaker() {
+        require(
+            hasRole(EXTERNAL_STAKER_ROLE, _msgSender()),
+            "Caller is not a external staker"
+        );
+        _;
+    }
 
     constructor() public {
         init_ = false;
@@ -51,16 +60,21 @@ contract Staking is AccessControl {
 
     function init(
         address _mainToken,
+        address _auction,
         address _subBalances,
-        address _externalStaker
+        address _externalStaker,
+        uint256 _stepTimestamp
     ) external {
         require(!init_, "NativeSwap: init is active");
         _setupRole(EXTERNAL_STAKER_ROLE, _externalStaker);
         mainToken = _mainToken;
+        auction = _auction;
         subBalances = _subBalances;
-        shareRate = 1;
+        shareRate = 1e18;
         lastMainTokenBalance = 0;
-        nextPayoutCall = now.add(DAY);
+        stepTimestamp = _stepTimestamp;
+        nextPayoutCall = now.add(_stepTimestamp);
+        startContract = now;
         init_ = true;
     }
 
@@ -73,10 +87,12 @@ contract Staking is AccessControl {
     }
 
     function stake(uint256 amount, uint256 stakingDays) external {
-        uint256 start = now;
-        uint256 end = now.add(stakingDays.mul(86400));
+        require(stakingDays > 0, "stakingDays < 1");
 
-        IERC20(mainToken).transferFrom(msg.sender, address(this), amount);
+        uint256 start = now;
+        uint256 end = now.add(stakingDays.mul(stepTimestamp));
+
+        IToken(mainToken).burn(msg.sender, amount);
         _sessionsIds = _sessionsIds.add(1);
         uint256 sessionId = _sessionsIds;
         uint256 shares = _getStakersSharesAmount(amount, start, end);
@@ -86,8 +102,7 @@ contract Staking is AccessControl {
             amount: amount,
             start: start,
             end: end,
-            shares: shares,
-            sessionIsActive: true
+            shares: shares
         });
 
         sessionsOf[msg.sender].push(sessionId);
@@ -102,36 +117,32 @@ contract Staking is AccessControl {
     }
 
     function externalStake(
+        address account,
         uint256 amount,
-        uint256 stakingDays,
-        address staker
-    ) external {
-        require(
-            hasRole(EXTERNAL_STAKER_ROLE, msg.sender),
-            "Caller is not a external staker"
-        );
+        uint256 stakingDays
+    ) external override onlyExternalStaker {
+        require(stakingDays > 0, "stakingDays < 1");
 
         uint256 start = now;
-        uint256 end = now.add(stakingDays.mul(86400));
+        uint256 end = now.add(stakingDays.mul(stepTimestamp));
 
-        IERC20(mainToken).transferFrom(msg.sender, address(this), amount);
+        IToken(mainToken).burn(account, amount);
         _sessionsIds = _sessionsIds.add(1);
         uint256 sessionId = _sessionsIds;
         uint256 shares = _getStakersSharesAmount(amount, start, end);
         sharesTotalSupply = sharesTotalSupply.add(shares);
 
-        sessionDataOf[staker][sessionId] = Session({
+        sessionDataOf[account][sessionId] = Session({
             amount: amount,
             start: start,
             end: end,
-            shares: shares,
-            sessionIsActive: true
+            shares: shares
         });
 
-        sessionsOf[staker].push(sessionId);
+        sessionsOf[account].push(sessionId);
 
         ISubBalances(subBalances).callIncomeStakerTrigger(
-            staker,
+            account,
             sessionId,
             start,
             end,
@@ -141,13 +152,16 @@ contract Staking is AccessControl {
 
     function unstake(uint256 sessionId) external {
         require(
-            sessionDataOf[msg.sender][sessionId].sessionIsActive,
-            "NativeSwap: Session is not active"
+            sessionDataOf[msg.sender][sessionId].shares > 0,
+            "NativeSwap: Shares balance is empty"
         );
 
-        sessionDataOf[msg.sender][sessionId].sessionIsActive = false;
+        IToken(mainToken).mint(
+            address(this),
+            sessionDataOf[msg.sender][sessionId].amount
+        );
 
-        uint256 accumulator;
+        uint256 stakingInterest;
 
         for (uint256 i = 0; i < payouts.length; i++) {
             uint256 payout = payouts[i]
@@ -155,7 +169,7 @@ contract Staking is AccessControl {
                 .mul(sessionDataOf[msg.sender][sessionId].shares)
                 .div(payouts[i].sharesTotalSupply);
 
-            accumulator = accumulator.add(payout);
+            stakingInterest = stakingInterest.add(payout);
         }
 
         uint256 newShareRate = _getShareRate(
@@ -163,51 +177,135 @@ contract Staking is AccessControl {
             sessionId,
             sessionDataOf[msg.sender][sessionId].start,
             sessionDataOf[msg.sender][sessionId].end,
-            accumulator
+            stakingInterest
         );
 
         if (newShareRate > shareRate) {
             shareRate = newShareRate;
         }
 
-        uint256 estimatePeriod = sessionDataOf[msg.sender][sessionId].end.sub(
-            sessionDataOf[msg.sender][sessionId].start
+        sharesTotalSupply = sharesTotalSupply.sub(
+            sessionDataOf[msg.sender][sessionId].shares
         );
 
-        uint256 existingPeriod = now.sub(
-            sessionDataOf[msg.sender][sessionId].start
-        );
+        uint256 stakingDays = (
+            sessionDataOf[msg.sender][sessionId].end.sub(
+                sessionDataOf[msg.sender][sessionId].start
+            )
+        )
+            .div(stepTimestamp);
 
-        if (estimatePeriod > existingPeriod) {
-            uint256 localDelta = accumulator
-                .mul(estimatePeriod.sub(existingPeriod))
-                .div(estimatePeriod);
+        uint256 daysStaked = (
+            now.sub(sessionDataOf[msg.sender][sessionId].start)
+        )
+            .div(stepTimestamp);
 
-            delta = delta.add(localDelta);
+        uint256 amountAndInterest = sessionDataOf[msg.sender][sessionId]
+            .amount
+            .add(stakingInterest);
 
-            IERC20(mainToken).transfer(msg.sender, accumulator.sub(localDelta));
-
-            return;
-        }
-
-        if (estimatePeriod < existingPeriod) {
-            uint256 daysAfterGracePeriod = now.sub(
-                sessionDataOf[msg.sender][sessionId].end
+        // Early
+        if (stakingDays > daysStaked) {
+            uint256 payOutAmount = amountAndInterest.mul(daysStaked).div(
+                stakingDays
             );
 
-            uint256 localDelta = accumulator
-                .mul(daysAfterGracePeriod.sub(14))
-                .div(700);
+            uint256 earlyUnstakePenalty = amountAndInterest.sub(payOutAmount);
 
-            delta = delta.add(localDelta);
+            uint256 finalPayotAmount = amountAndInterest.sub(
+                earlyUnstakePenalty
+            );
 
-            IERC20(mainToken).transfer(msg.sender, accumulator.sub(localDelta));
+            uint256 currentMainTokenBalanceOfContract = IERC20(mainToken)
+                .balanceOf(address(this));
+
+            if (finalPayotAmount > currentMainTokenBalanceOfContract) {
+                IToken(mainToken).mint(
+                    address(this),
+                    finalPayotAmount.sub(currentMainTokenBalanceOfContract)
+                );
+            }
+
+            // To auction
+            IERC20(mainToken).transfer(auction, earlyUnstakePenalty);
+            IAuction(auction).callIncomeWeeklyTokensTrigger(
+                earlyUnstakePenalty
+            );
+
+            // To account
+            IERC20(mainToken).transfer(msg.sender, finalPayotAmount);
 
             return;
         }
 
-        if (estimatePeriod == existingPeriod) {
-            IERC20(mainToken).transfer(msg.sender, accumulator);
+        // In time
+        if (stakingDays <= daysStaked && daysStaked < stakingDays.add(14)) {
+            uint256 finalPayotAmount = amountAndInterest;
+
+            uint256 currentMainTokenBalanceOfContract = IERC20(mainToken)
+                .balanceOf(address(this));
+
+            // IAuction(auction).callIncomeTokensTrigger();
+            if (finalPayotAmount > currentMainTokenBalanceOfContract) {
+                IToken(mainToken).mint(
+                    address(this),
+                    finalPayotAmount.sub(currentMainTokenBalanceOfContract)
+                );
+            }
+
+            IERC20(mainToken).transfer(msg.sender, finalPayotAmount);
+            return;
+        }
+
+        // Late
+        if (
+            stakingDays.add(14) <= daysStaked &&
+            daysStaked < stakingDays.add(714)
+        ) {
+            uint256 daysAfterStaking = daysStaked.sub(stakingDays);
+
+            uint256 payOutAmount = amountAndInterest
+                .mul(uint256(714).sub(daysAfterStaking))
+                .div(700);
+
+            uint256 lateUnstakePenalty = amountAndInterest.sub(payOutAmount);
+
+            uint256 finalPayotAmount = amountAndInterest.sub(
+                lateUnstakePenalty
+            );
+
+            uint256 currentMainTokenBalanceOfContract = IERC20(mainToken)
+                .balanceOf(address(this));
+
+            // IAuction(auction).callIncomeTokensTrigger();
+            if (finalPayotAmount > currentMainTokenBalanceOfContract) {
+                IToken(mainToken).mint(
+                    address(this),
+                    finalPayotAmount.sub(currentMainTokenBalanceOfContract)
+                );
+            }
+
+            // To auction
+            IERC20(mainToken).transfer(auction, lateUnstakePenalty);
+            IAuction(auction).callIncomeWeeklyTokensTrigger(lateUnstakePenalty);
+
+            // IAuction(auction).callIncomeTokensTrigger();
+
+            // To account
+            IERC20(mainToken).transfer(
+                msg.sender,
+                amountAndInterest.sub(finalPayotAmount)
+            );
+
+            return;
+        }
+
+        // Nothing
+        if (stakingDays.add(714) <= daysStaked) {
+            // To auction
+            IERC20(mainToken).transfer(auction, amountAndInterest);
+            IAuction(auction).callIncomeWeeklyTokensTrigger(amountAndInterest);
+
             return;
         }
 
@@ -218,6 +316,84 @@ contract Staking is AccessControl {
             sessionDataOf[msg.sender][sessionId].end,
             sessionDataOf[msg.sender][sessionId].shares
         );
+
+        sessionDataOf[msg.sender][sessionId].shares = 0;
+    }
+
+    function readUnstake(address account, uint256 sessionId)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        if (sessionDataOf[account][sessionId].shares == 0) return (0, 0);
+
+        uint256 stakingInterest;
+
+        for (uint256 i = 0; i < payouts.length; i++) {
+            uint256 payout = payouts[i]
+                .payout
+                .mul(sessionDataOf[account][sessionId].shares)
+                .div(payouts[i].sharesTotalSupply);
+
+            stakingInterest = stakingInterest.add(payout);
+        }
+
+        uint256 stakingDays = (
+            sessionDataOf[account][sessionId].end.sub(
+                sessionDataOf[account][sessionId].start
+            )
+        )
+            .div(stepTimestamp);
+
+        uint256 daysStaked = (now.sub(sessionDataOf[account][sessionId].start))
+            .div(stepTimestamp);
+
+        uint256 amountAndInterest = sessionDataOf[account][sessionId]
+            .amount
+            .add(stakingInterest);
+
+        // Early
+        if (stakingDays > daysStaked) {
+            uint256 payOutAmount = amountAndInterest.mul(
+                daysStaked.div(stakingDays)
+            );
+
+            uint256 earlyUnstakePenalty = amountAndInterest.sub(payOutAmount);
+
+            return (
+                amountAndInterest.sub(earlyUnstakePenalty),
+                earlyUnstakePenalty
+            );
+        }
+
+        // In time
+        if (stakingDays <= daysStaked && daysStaked < stakingDays.add(14)) {
+            return (amountAndInterest, 0);
+        }
+
+        // Late
+        if (
+            stakingDays.add(14) <= daysStaked &&
+            daysStaked < stakingDays.add(714)
+        ) {
+            uint256 daysAfterStaking = daysStaked.sub(stakingDays);
+
+            uint256 payOutAmount = amountAndInterest
+                .mul(uint256(686).add(daysAfterStaking))
+                .div(700);
+
+            uint256 lateUnstakePenalty = amountAndInterest.sub(payOutAmount);
+
+            return (
+                amountAndInterest.sub(lateUnstakePenalty),
+                lateUnstakePenalty
+            );
+        }
+
+        // Nothing
+        if (stakingDays.add(714) <= daysStaked) {
+            return (0, amountAndInterest);
+        }
     }
 
     function makePayout() external {
@@ -226,7 +402,7 @@ contract Staking is AccessControl {
             Payout({payout: _getPayout(), sharesTotalSupply: sharesTotalSupply})
         );
 
-        nextPayoutCall = nextPayoutCall.add(DAY);
+        nextPayoutCall = nextPayoutCall.add(stepTimestamp);
     }
 
     function readPayout() external view returns (uint256) {
@@ -240,11 +416,11 @@ contract Staking is AccessControl {
 
         uint256 currentTokenTotalSupply = IERC20(mainToken).totalSupply();
 
-        uint256 inflation = uint256(21087e16).mul(
-            currentTokenTotalSupply.add(sharesTotalSupply)
-        );
+        uint256 inflation = uint256(8)
+            .mul(currentTokenTotalSupply.add(sharesTotalSupply))
+            .div(365);
 
-        uint256 finalAmnount = amountTokenInDay.add(inflation).add(delta);
+        uint256 finalAmnount = amountTokenInDay.add(inflation);
 
         return finalAmnount;
     }
@@ -260,17 +436,15 @@ contract Staking is AccessControl {
 
         uint256 currentTokenTotalSupply = IERC20(mainToken).totalSupply();
 
-        uint256 inflation = uint256(21087e16).mul(
-            currentTokenTotalSupply.add(sharesTotalSupply)
-        );
+        uint256 inflation = uint256(8)
+            .mul(currentTokenTotalSupply.add(sharesTotalSupply))
+            .div(365);
 
         IToken(mainToken).mint(address(this), inflation);
 
         lastMainTokenBalance = currentTokenBalance;
 
-        uint256 finalAmnount = amountTokenInDay.add(inflation).add(delta);
-
-        delta = 0;
+        uint256 finalAmnount = amountTokenInDay.add(inflation);
 
         return finalAmnount;
     }
@@ -280,8 +454,11 @@ contract Staking is AccessControl {
         uint256 start,
         uint256 end
     ) internal view returns (uint256) {
-        uint256 coeff = uint256(1).add((end.sub(start).sub(1)).div(1820));
-        return amount.mul(coeff).div(shareRate);
+        uint256 stakingDays = (end.sub(start)).div(stepTimestamp);
+        uint256 numerator = amount.mul(uint256(1819).add(stakingDays));
+        uint256 denominator = uint256(1820).mul(shareRate);
+
+        return (numerator).mul(1e18).div(denominator);
     }
 
     function _getShareRate(
@@ -289,16 +466,23 @@ contract Staking is AccessControl {
         uint256 sessionId,
         uint256 start,
         uint256 end,
-        uint256 accumulator
+        uint256 stakingInterest
     ) internal view returns (uint256) {
-        return
-            (amount.add(accumulator))
-                .mul(uint256(1).add(end.sub(start).sub(1)).div(1820))
-                .div(sessionDataOf[msg.sender][sessionId].shares);
+        uint256 stakingDays = (end.sub(start)).div(stepTimestamp);
+
+        uint256 numerator = (amount.add(stakingInterest)).mul(
+            uint256(1819).add(stakingDays)
+        );
+
+        uint256 denominator = uint256(1820).mul(
+            sessionDataOf[msg.sender][sessionId].shares
+        );
+
+        return (numerator).mul(1e18).div(denominator);
     }
 
     // Helper
-    function getNow() external view returns (uint256) {
+    function getNow0x() external view returns (uint256) {
         return now;
     }
 }
