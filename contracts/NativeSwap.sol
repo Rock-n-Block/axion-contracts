@@ -84,7 +84,7 @@ contract NativeSwap {
 
     function swapNativeToken() external {
         uint256 amount = swapTokenBalanceOf[msg.sender];
-        uint256 deltaPenalty = _calculateDeltaPenalty(amount);
+        uint256 deltaPenalty = calculateDeltaPenalty(amount);
         uint256 amountOut = amount.sub(deltaPenalty);
         require(amount > 0, "swapNativeToken: amount == 0");
         swapTokenBalanceOf[msg.sender] = 0;
@@ -100,13 +100,13 @@ contract NativeSwap {
     {
         uint256 amount = swapTokenBalanceOf[account];
         if (amount == 0) return (0, 0);
-        uint256 deltaPenalty = _calculateDeltaPenalty(amount);
+        uint256 deltaPenalty = calculateDeltaPenalty(amount);
         uint256 amountOut = amount.sub(deltaPenalty);
         return (amountOut, deltaPenalty);
     }
 
-    function _calculateDeltaPenalty(uint256 amount)
-        internal
+    function calculateDeltaPenalty(uint256 amount)
+        public
         view
         returns (uint256)
     {

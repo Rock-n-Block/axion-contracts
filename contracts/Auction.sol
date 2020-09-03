@@ -142,6 +142,19 @@ contract Auction is IAuction, AccessControl {
 
         uint256 payout = _calculatePayout(auctionId, auctionETHUserBalance);
 
+        uint256 uniswapPayoutWithPercent = _calculatePayoutWithUniswap(
+            auctionETHUserBalance,
+            payout
+        );
+
+        if (payout > uniswapPayoutWithPercent) {
+            uint256 nextWeeklyAuction = calculateNearestWeeklyAuction();
+
+            reservesOf[nextWeeklyAuction].token = reservesOf[nextWeeklyAuction]
+                .token
+                .add(payout.sub(uniswapPayoutWithPercent));
+        }
+
         auctionBetOf[auctionId][_msgSender()].eth = 0;
 
         if (address(auctionBetOf[auctionId][_msgSender()].ref) == address(0)) {
@@ -195,7 +208,7 @@ contract Auction is IAuction, AccessControl {
         return now.sub(start).div(stepTimestamp);
     }
 
-    function _changePayoutWithUniswap(uint256 amount, uint256 payout)
+    function _calculatePayoutWithUniswap(uint256 amount, uint256 payout)
         internal
         view
         returns (uint256)
@@ -226,11 +239,10 @@ contract Auction is IAuction, AccessControl {
         view
         returns (uint256)
     {
-        uint256 payout = amount.mul(reservesOf[auctionId].token).div(
-            reservesOf[auctionId].eth
-        );
-
-        return _changePayoutWithUniswap(amount, payout);
+        return
+            amount.mul(reservesOf[auctionId].token).div(
+                reservesOf[auctionId].eth
+            );
     }
 
     function _calculateRecipientAndUniswapAmountsToSend()
