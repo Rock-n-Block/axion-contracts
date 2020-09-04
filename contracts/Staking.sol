@@ -385,7 +385,7 @@ contract Staking is IStaking, AccessControl {
 
         uint256 inflation = uint256(8)
             .mul(currentTokenTotalSupply.add(sharesTotalSupply))
-            .div(365);
+            .div(36500);
 
         globalPayin = globalPayin.add(inflation);
 
