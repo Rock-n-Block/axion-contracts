@@ -170,6 +170,10 @@ contract Staking is IStaking, AccessControl {
             "NativeSwap: No payouts for this session"
         );
 
+        uint256 shares = sessionDataOf[msg.sender][sessionId].shares;
+
+        sessionDataOf[msg.sender][sessionId].shares = 0;
+
         uint256 stakingInterest;
 
         for (
@@ -177,10 +181,9 @@ contract Staking is IStaking, AccessControl {
             i < payouts.length;
             i++
         ) {
-            uint256 payout = payouts[i]
-                .payout
-                .mul(sessionDataOf[msg.sender][sessionId].shares)
-                .div(payouts[i].sharesTotalSupply);
+            uint256 payout = payouts[i].payout.mul(shares).div(
+                payouts[i].sharesTotalSupply
+            );
 
             stakingInterest = stakingInterest.add(payout);
         }
@@ -197,9 +200,7 @@ contract Staking is IStaking, AccessControl {
             shareRate = newShareRate;
         }
 
-        sharesTotalSupply = sharesTotalSupply.sub(
-            sessionDataOf[msg.sender][sessionId].shares
-        );
+        sharesTotalSupply = sharesTotalSupply.sub(shares);
 
         uint256 stakingDays = (
             sessionDataOf[msg.sender][sessionId].end.sub(
@@ -281,8 +282,6 @@ contract Staking is IStaking, AccessControl {
         //     sessionDataOf[msg.sender][sessionId].end,
         //     sessionDataOf[msg.sender][sessionId].shares
         // );
-
-        sessionDataOf[msg.sender][sessionId].shares = 0;
     }
 
     function readUnstake(uint256 sessionId, address account)

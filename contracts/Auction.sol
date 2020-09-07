@@ -138,6 +138,8 @@ contract Auction is IAuction, AccessControl {
         uint256 auctionETHUserBalance = auctionBetOf[auctionId][_msgSender()]
             .eth;
 
+        auctionBetOf[auctionId][_msgSender()].eth = 0;
+
         require(auctionETHUserBalance > 0, "zero balance in auction");
 
         uint256 payout = _calculatePayout(auctionId, auctionETHUserBalance);
@@ -153,9 +155,9 @@ contract Auction is IAuction, AccessControl {
             reservesOf[nextWeeklyAuction].token = reservesOf[nextWeeklyAuction]
                 .token
                 .add(payout.sub(uniswapPayoutWithPercent));
-        }
 
-        auctionBetOf[auctionId][_msgSender()].eth = 0;
+            payout = uniswapPayoutWithPercent;
+        }
 
         if (address(auctionBetOf[auctionId][_msgSender()].ref) == address(0)) {
             IERC20(mainToken).transfer(_msgSender(), payout);

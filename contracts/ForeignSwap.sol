@@ -54,10 +54,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         address _bigPayDayPool,
         uint256 _totalSnapshotAmount,
         uint256 _totalSnapshotAddresses
-    ) 
-        external
-        onlySetter
-    {
+    ) external onlySetter {
         signerAddress = _signer;
         start = now;
         stepTimestamp = _stepTimestamp;
@@ -71,35 +68,65 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         renounceRole(SETTER_ROLE, _msgSender());
     }
 
-    function getCurrentClaimedAmount() external view override returns (uint256) {
+    function getCurrentClaimedAmount()
+        external
+        override
+        view
+        returns (uint256)
+    {
         return claimedAmount;
     }
 
-    function getTotalSnapshotAmount() external view override returns (uint256) {
+    function getTotalSnapshotAmount() external override view returns (uint256) {
         return totalSnapshotAmount;
     }
 
-    function getCurrentClaimedAddresses() external view override returns (uint256) {
+    function getCurrentClaimedAddresses()
+        external
+        override
+        view
+        returns (uint256)
+    {
         return claimedAddresses;
     }
 
-    function getTotalSnapshotAddresses() external view override returns (uint256) {
+    function getTotalSnapshotAddresses()
+        external
+        override
+        view
+        returns (uint256)
+    {
         return totalSnapshotAddresses;
     }
 
-
-    function getMessageHash(uint256 amount, address account) public pure returns (bytes32) {
+    function getMessageHash(uint256 amount, address account)
+        public
+        pure
+        returns (bytes32)
+    {
         return keccak256(abi.encode(amount, account));
     }
 
-    function check(uint256 amount, bytes memory signature) public view returns (bool) {
-        bytes32 messageHash =  getMessageHash(amount, address(msg.sender));
+    function check(uint256 amount, bytes memory signature)
+        public
+        view
+        returns (bool)
+    {
+        bytes32 messageHash = getMessageHash(amount, address(msg.sender));
         return ECDSA.recover(messageHash, signature) == signerAddress;
     }
 
-    function getUserClaimableAmountFor(uint256 amount) public view returns (uint256, uint256) {
+    function getUserClaimableAmountFor(uint256 amount)
+        public
+        view
+        returns (uint256, uint256)
+    {
         if (amount > 0) {
-            (uint256 amountOut, uint256 delta, uint256 deltaAuctionWeekly) = getClaimableAmount(amount);
+            (
+                uint256 amountOut,
+                uint256 delta,
+                uint256 deltaAuctionWeekly
+            ) = getClaimableAmount(amount);
             uint256 deltaPenalized = delta.add(deltaAuctionWeekly);
             return (amountOut, deltaPenalized);
         } else {
@@ -107,16 +134,25 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         }
     }
 
-
-    function claimFromForeign(uint256 amount, bytes memory signature) public returns (bool) {
+    function claimFromForeign(uint256 amount, bytes memory signature)
+        public
+        returns (bool)
+    {
         require(amount > 0, "CLAIM: amount <= 0");
-        require(check(amount, signature), "CLAIM: cannot claim because signature is not correct");
+        require(
+            check(amount, signature),
+            "CLAIM: cannot claim because signature is not correct"
+        );
         require(claimedBalanceOf[msg.sender] == 0, "CLAIM: cannot claim twice");
 
-        (uint256 amountOut, uint256 delta, uint256 deltaAuctionWeekly) = getClaimableAmount(amount);
+        (
+            uint256 amountOut,
+            uint256 delta,
+            uint256 deltaAuctionWeekly
+        ) = getClaimableAmount(amount);
 
-         uint256 deltaPart = delta.div(PERIOD);
-         uint256 deltaAuctionDaily = deltaPart.mul(PERIOD.sub(uint256(1)));
+        uint256 deltaPart = delta.div(PERIOD);
+        uint256 deltaAuctionDaily = deltaPart.mul(PERIOD.sub(uint256(1)));
 
         IToken(mainToken).mint(auction, deltaAuctionDaily);
         IAuction(auction).callIncomeDailyTokensTrigger(delta);
@@ -129,7 +165,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         IToken(mainToken).mint(bigPayDayPool, deltaPart);
         IBPD(bigPayDayPool).callIncomeTokensTrigger(deltaPart);
         IToken(mainToken).mint(_msgSender(), amountOut);
-        IStaking(staking).externalStake(msg.sender, amountOut, PERIOD);
+        IStaking(staking).externalStake(amountOut, PERIOD, msg.sender);
 
         claimedBalanceOf[msg.sender] = amountOut;
         claimedAmount = claimedAmount.add(amountOut);
@@ -147,7 +183,15 @@ contract ForeignSwap is IForeignSwap, AccessControl {
     //     return  startTime.add(stakePeriod);
     // }
 
-    function getClaimableAmount(uint256 amount) internal view returns (uint256, uint256, uint256) {
+    function getClaimableAmount(uint256 amount)
+        internal
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         uint256 deltaAuctionWeekly = 0;
         if (amount > maxClaimAmount) {
             deltaAuctionWeekly = amount.sub(maxClaimAmount);

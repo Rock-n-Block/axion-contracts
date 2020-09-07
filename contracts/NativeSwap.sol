@@ -10,15 +10,15 @@ import "./interfaces/IAuction.sol";
 contract NativeSwap {
     using SafeMath for uint256;
 
-    uint256 private start;
-    uint256 private stepTimestamp;
-    address private swapToken;
-    address private mainToken;
-    address private dailyAuction;
+    uint256 public start;
+    uint256 public stepTimestamp;
+    IERC20 public swapToken;
+    IToken public mainToken;
+    IAuction public dailyAuction;
 
     bool public init_;
 
-    mapping(address => uint256) private swapTokenBalanceOf;
+    mapping(address => uint256) public swapTokenBalanceOf;
 
     constructor() public {
         init_ = false;
@@ -32,43 +32,18 @@ contract NativeSwap {
     ) external {
         require(!init_, "init is active");
         stepTimestamp = _stepTimestamp;
-        swapToken = _swapToken;
-        mainToken = _mainToken;
-        dailyAuction = _dailyAuction;
+        swapToken = IERC20(_swapToken);
+        mainToken = IToken(_mainToken);
+        dailyAuction = IAuction(_dailyAuction);
         start = now;
         init_ = true;
     }
 
-    function getStart() external view returns (uint256) {
-        return start;
-    }
-
-    function getStepTimestamp() external view returns (uint256) {
-        return stepTimestamp;
-    }
-
-    function getSwapToken() external view returns (address) {
-        return swapToken;
-    }
-
-    function getMainToken() external view returns (address) {
-        return mainToken;
-    }
-
-    function getDailyAuction() external view returns (address) {
-        return dailyAuction;
-    }
-
-    function getSwapTokenBalanceOf(address account)
-        external
-        view
-        returns (uint256)
-    {
-        return swapTokenBalanceOf[account];
-    }
-
     function deposit(uint256 _amount) external {
-        IERC20(swapToken).transferFrom(msg.sender, address(this), _amount);
+        require(
+            swapToken.transferFrom(msg.sender, address(this), _amount),
+            "NativeSwap: transferFrom error"
+        );
         swapTokenBalanceOf[msg.sender] = swapTokenBalanceOf[msg.sender].add(
             _amount
         );
@@ -79,22 +54,23 @@ contract NativeSwap {
         swapTokenBalanceOf[msg.sender] = swapTokenBalanceOf[msg.sender].sub(
             _amount
         );
-        IERC20(swapToken).transfer(msg.sender, _amount);
+        swapToken.transfer(msg.sender, _amount);
     }
 
     function swapNativeToken() external {
         uint256 amount = swapTokenBalanceOf[msg.sender];
-        uint256 deltaPenalty = calculateDeltaPenalty(amount);
-        uint256 amountOut = amount.sub(deltaPenalty);
         require(amount > 0, "swapNativeToken: amount == 0");
+        (uint256 amountOut, uint256 deltaPenalty) = getAmountOutAndPenalty(
+            msg.sender
+        );
         swapTokenBalanceOf[msg.sender] = 0;
-        IToken(mainToken).mint(dailyAuction, deltaPenalty);
-        IAuction(dailyAuction).callIncomeDailyTokensTrigger(deltaPenalty);
-        IToken(mainToken).mint(msg.sender, amountOut);
+        mainToken.mint(address(dailyAuction), deltaPenalty);
+        dailyAuction.callIncomeDailyTokensTrigger(deltaPenalty);
+        mainToken.mint(msg.sender, amountOut);
     }
 
-    function readSwapNativeToken(address account)
-        external
+    function getAmountOutAndPenalty(address account)
+        public
         view
         returns (uint256, uint256)
     {
@@ -110,8 +86,12 @@ contract NativeSwap {
         view
         returns (uint256)
     {
-        uint256 stepsFromStart = (now.sub(start)).div(stepTimestamp);
+        uint256 stepsFromStart = calculateStepsFromStart();
         if (stepsFromStart > 350) return amount;
         return amount.mul(stepsFromStart).div(350);
+    }
+
+    function calculateStepsFromStart() public view returns (uint256) {
+        return now.sub(start).div(stepTimestamp);
     }
 }
