@@ -232,7 +232,7 @@ contract Staking is IStaking, AccessControl {
 
         // To auction
         _initPayout(auction, penalty);
-        // IAuction(auction).callIncomeWeeklyTokensTrigger(penalty);
+        IAuction(auction).callIncomeWeeklyTokensTrigger(penalty);
 
         // To account
         _initPayout(msg.sender, amountOut);
@@ -345,15 +345,15 @@ contract Staking is IStaking, AccessControl {
     function readPayout() external view returns (uint256) {
         uint256 amountTokenInDay = IERC20(mainToken).balanceOf(address(this));
 
-        uint256 currentTokenTotalSupply = IERC20(mainToken).totalSupply();
+        uint256 currentTokenTotalSupply = (IERC20(mainToken).totalSupply()).add(
+            globalPayin
+        );
 
         uint256 inflation = uint256(8)
             .mul(currentTokenTotalSupply.add(sharesTotalSupply))
-            .div(365);
+            .div(36500);
 
-        uint256 finalAmount = amountTokenInDay.add(inflation);
-
-        return finalAmount;
+        return amountTokenInDay.add(inflation);
     }
 
     function _getStakersSharesAmount(
