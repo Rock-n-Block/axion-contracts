@@ -145,18 +145,59 @@ contract Staking is IStaking, AccessControl {
 
         sessionsOf[staker].push(sessionId);
 
-        // ISubBalances(subBalances).callIncomeStakerTrigger(
-        //     staker,
-        //     sessionId,
-        //     start,
-        //     end,
-        //     shares
-        // );
+        ISubBalances(subBalances).callIncomeStakerTrigger(
+            staker,
+            sessionId,
+            start,
+            end,
+            shares
+        );
     }
 
     function _initPayout(address to, uint256 amount) internal {
         IToken(mainToken).mint(to, amount);
         globalPayout = globalPayout.add(amount);
+    }
+
+    function calculateStakingInterest(
+        uint256 sessionId,
+        address account,
+        uint256 shares
+    ) public view returns (uint256) {
+        uint256 stakingInterest;
+
+        for (
+            uint256 i = sessionDataOf[account][sessionId].nextPayout;
+            i < payouts.length;
+            i++
+        ) {
+            uint256 payout = payouts[i].payout.mul(shares).div(
+                payouts[i].sharesTotalSupply
+            );
+
+            stakingInterest = stakingInterest.add(payout);
+        }
+
+        return stakingInterest;
+    }
+
+    function _updateShareRate(
+        address account,
+        uint256 shares,
+        uint256 stakingInterest,
+        uint256 sessionId
+    ) internal {
+        uint256 newShareRate = _getShareRate(
+            sessionDataOf[account][sessionId].amount,
+            shares,
+            sessionDataOf[account][sessionId].start,
+            sessionDataOf[account][sessionId].end,
+            stakingInterest
+        );
+
+        if (newShareRate > shareRate) {
+            shareRate = newShareRate;
+        }
     }
 
     function unstake(uint256 sessionId) external {
@@ -174,34 +215,42 @@ contract Staking is IStaking, AccessControl {
 
         sessionDataOf[msg.sender][sessionId].shares = 0;
 
-        uint256 stakingInterest;
-
-        for (
-            uint256 i = sessionDataOf[msg.sender][sessionId].nextPayout;
-            i < payouts.length;
-            i++
-        ) {
-            uint256 payout = payouts[i].payout.mul(shares).div(
-                payouts[i].sharesTotalSupply
-            );
-
-            stakingInterest = stakingInterest.add(payout);
-        }
-
-        uint256 newShareRate = _getShareRate(
-            sessionDataOf[msg.sender][sessionId].amount,
+        uint256 stakingInterest = calculateStakingInterest(
             sessionId,
-            sessionDataOf[msg.sender][sessionId].start,
-            sessionDataOf[msg.sender][sessionId].end,
-            stakingInterest
+            msg.sender,
+            shares
         );
 
-        if (newShareRate > shareRate) {
-            shareRate = newShareRate;
-        }
+        _updateShareRate(msg.sender, shares, stakingInterest, sessionId);
 
         sharesTotalSupply = sharesTotalSupply.sub(shares);
 
+        (uint256 amountOut, uint256 penalty) = getAmountOutAndPenalty(
+            sessionId,
+            stakingInterest
+        );
+
+        // To auction
+        _initPayout(auction, penalty);
+        // IAuction(auction).callIncomeWeeklyTokensTrigger(penalty);
+
+        // To account
+        _initPayout(msg.sender, amountOut);
+
+        // ISubBalances(subBalances).callOutcomeStakerTrigger(
+        //     msg.sender,
+        //     sessionId,
+        //     sessionDataOf[msg.sender][sessionId].start,
+        //     sessionDataOf[msg.sender][sessionId].end,
+        //     sessionDataOf[msg.sender][sessionId].shares
+        // );
+    }
+
+    function getAmountOutAndPenalty(uint256 sessionId, uint256 stakingInterest)
+        public
+        view
+        returns (uint256, uint256)
+    {
         uint256 stakingDays = (
             sessionDataOf[msg.sender][sessionId].end.sub(
                 sessionDataOf[msg.sender][sessionId].start
@@ -226,114 +275,14 @@ contract Staking is IStaking, AccessControl {
 
             uint256 earlyUnstakePenalty = amountAndInterest.sub(payOutAmount);
 
-            // To auction
-            _initPayout(auction, earlyUnstakePenalty);
-            // IAuction(auction).callIncomeWeeklyTokensTrigger(
-            //     earlyUnstakePenalty
-            // );
-
-            // To account
-            _initPayout(msg.sender, payOutAmount);
-
-            return;
-        }
-
-        // In time
-        if (stakingDays <= daysStaked && daysStaked < stakingDays.add(14)) {
-            _initPayout(msg.sender, amountAndInterest);
-            return;
-        }
-
-        // Late
-        if (
-            stakingDays.add(14) <= daysStaked &&
-            daysStaked < stakingDays.add(714)
-        ) {
-            uint256 daysAfterStaking = daysStaked.sub(stakingDays);
-
-            uint256 payOutAmount = amountAndInterest
-                .mul(uint256(714).sub(daysAfterStaking))
-                .div(700);
-
-            uint256 lateUnstakePenalty = amountAndInterest.sub(payOutAmount);
-
-            // To auction
-            _initPayout(auction, lateUnstakePenalty);
-            // IAuction(auction).callIncomeWeeklyTokensTrigger(lateUnstakePenalty);
-
-            // To account
-            _initPayout(msg.sender, payOutAmount);
-
-            return;
-        }
-
-        // Nothing
-        if (stakingDays.add(714) <= daysStaked) {
-            // To auction
-            _initPayout(auction, amountAndInterest);
-            // IAuction(auction).callIncomeWeeklyTokensTrigger(amountAndInterest);
-            return;
-        }
-
-        // ISubBalances(subBalances).callOutcomeStakerTrigger(
-        //     msg.sender,
-        //     sessionId,
-        //     sessionDataOf[msg.sender][sessionId].start,
-        //     sessionDataOf[msg.sender][sessionId].end,
-        //     sessionDataOf[msg.sender][sessionId].shares
-        // );
-    }
-
-    function readUnstake(uint256 sessionId, address account)
-        external
-        view
-        returns (uint256, uint256)
-    {
-        if (sessionDataOf[account][sessionId].shares == 0) return (0, 0);
-
-        uint256 stakingInterest;
-
-        for (uint256 i = 0; i < payouts.length; i++) {
-            uint256 payout = payouts[i]
-                .payout
-                .mul(sessionDataOf[account][sessionId].shares)
-                .div(payouts[i].sharesTotalSupply);
-
-            stakingInterest = stakingInterest.add(payout);
-        }
-
-        uint256 stakingDays = (
-            sessionDataOf[account][sessionId].end.sub(
-                sessionDataOf[account][sessionId].start
-            )
-        )
-            .div(stepTimestamp);
-
-        uint256 daysStaked = (now.sub(sessionDataOf[account][sessionId].start))
-            .div(stepTimestamp);
-
-        uint256 amountAndInterest = sessionDataOf[account][sessionId]
-            .amount
-            .add(stakingInterest);
-
-        // Early
-        if (stakingDays > daysStaked) {
-            uint256 payOutAmount = amountAndInterest.mul(daysStaked).div(
-                stakingDays
-            );
-
-            uint256 earlyUnstakePenalty = amountAndInterest.sub(payOutAmount);
-
             return (payOutAmount, earlyUnstakePenalty);
-        }
-
-        // In time
-        if (stakingDays <= daysStaked && daysStaked < stakingDays.add(14)) {
+            // In time
+        } else if (
+            stakingDays <= daysStaked && daysStaked < stakingDays.add(14)
+        ) {
             return (amountAndInterest, 0);
-        }
-
-        // Late
-        if (
+            // Late
+        } else if (
             stakingDays.add(14) <= daysStaked &&
             daysStaked < stakingDays.add(714)
         ) {
@@ -346,12 +295,12 @@ contract Staking is IStaking, AccessControl {
             uint256 lateUnstakePenalty = amountAndInterest.sub(payOutAmount);
 
             return (payOutAmount, lateUnstakePenalty);
-        }
-
-        // Nothing
-        if (stakingDays.add(714) <= daysStaked) {
+            // Nothing
+        } else if (stakingDays.add(714) <= daysStaked) {
             return (0, amountAndInterest);
         }
+
+        return (0, 0);
     }
 
     function makePayout() external {
@@ -421,7 +370,7 @@ contract Staking is IStaking, AccessControl {
 
     function _getShareRate(
         uint256 amount,
-        uint256 sessionId,
+        uint256 shares,
         uint256 start,
         uint256 end,
         uint256 stakingInterest
@@ -432,9 +381,7 @@ contract Staking is IStaking, AccessControl {
             uint256(1819).add(stakingDays)
         );
 
-        uint256 denominator = uint256(1820).mul(
-            sessionDataOf[msg.sender][sessionId].shares
-        );
+        uint256 denominator = uint256(1820).mul(shares);
 
         return (numerator).mul(1e18).div(denominator);
     }

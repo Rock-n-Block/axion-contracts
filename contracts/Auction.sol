@@ -31,7 +31,6 @@ contract Auction is IAuction, AccessControl {
     mapping(uint256 => mapping(address => bool)) public existAuctionsOf;
 
     uint256 public start;
-    uint256 public currentAuctionId;
     uint256 public stepTimestamp;
     uint256 public uniswapPercent;
     address public mainToken;
@@ -109,8 +108,6 @@ contract Auction is IAuction, AccessControl {
 
         uint256 stepsFromStart = calculateStepsFromStart();
 
-        currentAuctionId = stepsFromStart;
-
         auctionBetOf[stepsFromStart][_msgSender()].ref = ref;
 
         auctionBetOf[stepsFromStart][_msgSender()]
@@ -184,8 +181,9 @@ contract Auction is IAuction, AccessControl {
         onlyCaller
     {
         uint256 stepsFromStart = calculateStepsFromStart();
+        uint256 nextAuctionId = stepsFromStart.add(1);
 
-        reservesOf[stepsFromStart].token = reservesOf[stepsFromStart].token.add(
+        reservesOf[nextAuctionId].token = reservesOf[nextAuctionId].token.add(
             amount
         );
     }
@@ -262,8 +260,8 @@ contract Auction is IAuction, AccessControl {
         pure
         returns (uint256, uint256)
     {
-        uint256 toRefMintAmount = amount.mul(10).div(100);
-        uint256 toUserMintAmount = amount.mul(20).div(100);
+        uint256 toRefMintAmount = amount.mul(20).div(100);
+        uint256 toUserMintAmount = amount.mul(10).div(100);
 
         return (toRefMintAmount, toUserMintAmount);
     }

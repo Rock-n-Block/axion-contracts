@@ -14,7 +14,7 @@ contract NativeSwap {
     uint256 public stepTimestamp;
     IERC20 public swapToken;
     IToken public mainToken;
-    IAuction public dailyAuction;
+    IAuction public auction;
 
     bool public init_;
 
@@ -28,13 +28,13 @@ contract NativeSwap {
         uint256 _stepTimestamp,
         address _swapToken,
         address _mainToken,
-        address _dailyAuction
+        address _auction
     ) external {
         require(!init_, "init is active");
         stepTimestamp = _stepTimestamp;
         swapToken = IERC20(_swapToken);
         mainToken = IToken(_mainToken);
-        dailyAuction = IAuction(_dailyAuction);
+        auction = IAuction(_auction);
         start = now;
         init_ = true;
     }
@@ -59,26 +59,13 @@ contract NativeSwap {
 
     function swapNativeToken() external {
         uint256 amount = swapTokenBalanceOf[msg.sender];
-        require(amount > 0, "swapNativeToken: amount == 0");
-        (uint256 amountOut, uint256 deltaPenalty) = getAmountOutAndPenalty(
-            msg.sender
-        );
-        swapTokenBalanceOf[msg.sender] = 0;
-        mainToken.mint(address(dailyAuction), deltaPenalty);
-        dailyAuction.callIncomeDailyTokensTrigger(deltaPenalty);
-        mainToken.mint(msg.sender, amountOut);
-    }
-
-    function getAmountOutAndPenalty(address account)
-        public
-        view
-        returns (uint256, uint256)
-    {
-        uint256 amount = swapTokenBalanceOf[account];
-        if (amount == 0) return (0, 0);
         uint256 deltaPenalty = calculateDeltaPenalty(amount);
         uint256 amountOut = amount.sub(deltaPenalty);
-        return (amountOut, deltaPenalty);
+        require(amount > 0, "swapNativeToken: amount == 0");
+        swapTokenBalanceOf[msg.sender] = 0;
+        mainToken.mint(address(auction), deltaPenalty);
+        auction.callIncomeDailyTokensTrigger(deltaPenalty);
+        mainToken.mint(msg.sender, amountOut);
     }
 
     function calculateDeltaPenalty(uint256 amount)
