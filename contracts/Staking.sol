@@ -362,7 +362,7 @@ contract Staking is IStaking, AccessControl {
         uint256 numerator = amount.mul(uint256(1819).add(stakingDays));
         uint256 denominator = uint256(1820).mul(shareRate);
 
-        return (numerator).mul(IToken(mainToken).decimals()).div(denominator);
+        return (numerator).mul(1e18).div(denominator);
     }
 
     function _getShareRate(

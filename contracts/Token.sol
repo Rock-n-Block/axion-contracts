@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./interfaces/IToken.sol";
 
-contract Token is ERC20, AccessControl {
+contract Token is IToken, ERC20, AccessControl {
     using SafeMath for uint256;
 
     bytes32 private constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -86,11 +86,11 @@ contract Token is ERC20, AccessControl {
         _mint(_msgSender(), balance);
     }
 
-    function mint(address to, uint256 amount) external onlyMinter {
+    function mint(address to, uint256 amount) external override onlyMinter {
         _mint(to, amount);
     }
 
-    function burn(address from, uint256 amount) external onlyMinter {
+    function burn(address from, uint256 amount) external override onlyMinter {
         _burn(from, amount);
     }
 
