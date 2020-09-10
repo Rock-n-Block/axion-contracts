@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./interfaces/IToken.sol";
 
-contract Token is IToken, ERC20, AccessControl {
+contract Token is ERC20, AccessControl {
     using SafeMath for uint256;
 
     bytes32 private constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -15,7 +15,6 @@ contract Token is IToken, ERC20, AccessControl {
 
     IERC20 private swapToken;
     bool private swapIsOver;
-
     uint256 private swapTokenBalance;
 
     modifier onlyMinter() {
@@ -40,7 +39,7 @@ contract Token is IToken, ERC20, AccessControl {
     }
 
     function init(address[] calldata instances) external onlySetter {
-        require(instances.length == 6, "NativeSwap: wrong instances number");
+        require(instances.length == 5, "NativeSwap: wrong instances number");
 
         for (uint256 index = 0; index < instances.length; index++) {
             _setupRole(MINTER_ROLE, instances[index]);
@@ -66,7 +65,10 @@ contract Token is IToken, ERC20, AccessControl {
     }
 
     function initDeposit(uint256 _amount) external onlySetter {
-        swapToken.transferFrom(_msgSender(), address(this), _amount);
+        require(
+            swapToken.transferFrom(_msgSender(), address(this), _amount),
+            "Token: transferFrom error"
+        );
         swapTokenBalance = swapTokenBalance.add(_amount);
     }
 
@@ -84,11 +86,11 @@ contract Token is IToken, ERC20, AccessControl {
         _mint(_msgSender(), balance);
     }
 
-    function mint(address to, uint256 amount) external override onlyMinter {
+    function mint(address to, uint256 amount) external onlyMinter {
         _mint(to, amount);
     }
 
-    function burn(address from, uint256 amount) external override onlyMinter {
+    function burn(address from, uint256 amount) external onlyMinter {
         _burn(from, amount);
     }
 

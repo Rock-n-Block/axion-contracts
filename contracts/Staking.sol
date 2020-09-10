@@ -42,7 +42,6 @@ contract Staking is IStaking, AccessControl {
     uint256 public startContract;
     uint256 public globalPayout;
     uint256 public globalPayin;
-    uint256 public lastInflation;
     bool public init_;
 
     mapping(address => mapping(uint256 => Session)) public sessionDataOf;
@@ -65,11 +64,11 @@ contract Staking is IStaking, AccessControl {
         address _mainToken,
         address _auction,
         address _subBalances,
-        address _externalStaker,
+        address _foreignSwap,
         uint256 _stepTimestamp
     ) external {
         require(!init_, "NativeSwap: init is active");
-        _setupRole(EXTERNAL_STAKER_ROLE, _externalStaker);
+        _setupRole(EXTERNAL_STAKER_ROLE, _foreignSwap);
         mainToken = _mainToken;
         auction = _auction;
         subBalances = _subBalances;
@@ -110,13 +109,13 @@ contract Staking is IStaking, AccessControl {
 
         sessionsOf[msg.sender].push(sessionId);
 
-        // ISubBalances(subBalances).callIncomeStakerTrigger(
-        //     msg.sender,
-        //     sessionId,
-        //     start,
-        //     end,
-        //     shares
-        // );
+        ISubBalances(subBalances).callIncomeStakerTrigger(
+            msg.sender,
+            sessionId,
+            start,
+            end,
+            shares
+        );
     }
 
     function externalStake(
@@ -129,7 +128,7 @@ contract Staking is IStaking, AccessControl {
         uint256 start = now;
         uint256 end = now.add(stakingDays.mul(stepTimestamp));
 
-        IToken(mainToken).burn(staker, amount);
+        IToken(mainToken).burn(msg.sender, amount);
         _sessionsIds = _sessionsIds.add(1);
         uint256 sessionId = _sessionsIds;
         uint256 shares = _getStakersSharesAmount(amount, start, end);
@@ -232,18 +231,18 @@ contract Staking is IStaking, AccessControl {
 
         // To auction
         _initPayout(auction, penalty);
-        IAuction(auction).callIncomeWeeklyTokensTrigger(penalty);
+        IAuction(auction).callIncomeDailyTokensTrigger(penalty);
 
         // To account
         _initPayout(msg.sender, amountOut);
 
-        // ISubBalances(subBalances).callOutcomeStakerTrigger(
-        //     msg.sender,
-        //     sessionId,
-        //     sessionDataOf[msg.sender][sessionId].start,
-        //     sessionDataOf[msg.sender][sessionId].end,
-        //     sessionDataOf[msg.sender][sessionId].shares
-        // );
+        ISubBalances(subBalances).callOutcomeStakerTrigger(
+            msg.sender,
+            sessionId,
+            sessionDataOf[msg.sender][sessionId].start,
+            sessionDataOf[msg.sender][sessionId].end,
+            sessionDataOf[msg.sender][sessionId].shares
+        );
     }
 
     function getAmountOutAndPenalty(uint256 sessionId, uint256 stakingInterest)
@@ -312,6 +311,20 @@ contract Staking is IStaking, AccessControl {
         nextPayoutCall = nextPayoutCall.add(stepTimestamp);
     }
 
+    function readPayout() external view returns (uint256) {
+        uint256 amountTokenInDay = IERC20(mainToken).balanceOf(address(this));
+
+        uint256 currentTokenTotalSupply = (IERC20(mainToken).totalSupply()).add(
+            globalPayin
+        );
+
+        uint256 inflation = uint256(8)
+            .mul(currentTokenTotalSupply.add(sharesTotalSupply))
+            .div(36500);
+
+        return amountTokenInDay.add(inflation);
+    }
+
     function _getPayout() internal returns (uint256) {
         uint256 amountTokenInDay = IERC20(mainToken).balanceOf(address(this));
 
@@ -337,22 +350,6 @@ contract Staking is IStaking, AccessControl {
 
         globalPayin = globalPayin.add(inflation);
 
-        lastInflation = inflation;
-
-        return amountTokenInDay.add(inflation);
-    }
-
-    function readPayout() external view returns (uint256) {
-        uint256 amountTokenInDay = IERC20(mainToken).balanceOf(address(this));
-
-        uint256 currentTokenTotalSupply = (IERC20(mainToken).totalSupply()).add(
-            globalPayin
-        );
-
-        uint256 inflation = uint256(8)
-            .mul(currentTokenTotalSupply.add(sharesTotalSupply))
-            .div(36500);
-
         return amountTokenInDay.add(inflation);
     }
 
@@ -365,7 +362,7 @@ contract Staking is IStaking, AccessControl {
         uint256 numerator = amount.mul(uint256(1819).add(stakingDays));
         uint256 denominator = uint256(1820).mul(shareRate);
 
-        return (numerator).mul(1e18).div(denominator);
+        return (numerator).mul(IToken(mainToken).decimals()).div(denominator);
     }
 
     function _getShareRate(

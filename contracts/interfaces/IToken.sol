@@ -5,5 +5,7 @@ pragma solidity ^0.6.0;
 interface IToken {
     function mint(address to, uint256 amount) external;
 
-    function burn(address tfromo, uint256 amount) external;
+    function burn(address from, uint256 amount) external;
+
+    function decimals() external view returns (uint8);
 }
