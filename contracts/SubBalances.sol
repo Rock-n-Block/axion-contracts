@@ -49,7 +49,7 @@ contract SubBalances is ISubBalances, AccessControl {
 	uint256 public startTimestamp;
     uint256 public stepTimestamp;
     uint256 public basePeriod;
-    uint256[5] public PERIODS = [350, 700, 1050, 1400, 1750];
+    uint256[5] public PERIODS;
 
 	uint256 public currentSharesTotalSupply;
 
@@ -174,7 +174,7 @@ contract SubBalances is ISubBalances, AccessControl {
             return (payoutAmount, earlyUnstakePenalty);
         // Unstaked in time, no penalty
         } else if (
-            stakingDays <= daysStaked && daysStaked < stakingDays.add(144)
+            stakingDays <= daysStaked && daysStaked < stakingDays.add(14)
         ) {
             return (subBalancePayoutAmount, 0);
         // Unstaked late
@@ -190,7 +190,7 @@ contract SubBalances is ISubBalances, AccessControl {
             return (0, subBalancePayoutAmount);
         }
 
-        //return (0, 0);
+        return (0, 0);
     }
 
     function withdrawPayout(uint256 sessionId) public {
