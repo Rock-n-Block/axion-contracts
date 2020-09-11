@@ -167,8 +167,8 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         IToken(mainToken).mint(_msgSender(), amountOut);
         IStaking(staking).externalStake(amountOut, PERIOD, msg.sender);
 
-        claimedBalanceOf[msg.sender] = amountOut;
-        claimedAmount = claimedAmount.add(amountOut);
+        claimedBalanceOf[msg.sender] = amount;
+        claimedAmount = claimedAmount.add(amount);
         claimedAddresses = claimedAddresses.add(uint256(1));
 
         return true;
