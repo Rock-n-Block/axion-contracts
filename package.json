@@ -17,9 +17,12 @@
   "homepage": "https://github.com/Rock-n-Block/axion-contracts#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^3.0.1",
+    "ansi-colors": "^4.1.1",
     "bn.js": "^5.1.3",
     "chai": "^4.2.0",
     "chai-bn": "^0.2.1",
+    "eth-crypto": "^1.7.0",
+    "semver": "^7.3.2",
     "solidity-coverage": "^0.7.9",
     "truffle": "^5.1.40"
   }

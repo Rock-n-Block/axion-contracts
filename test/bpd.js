@@ -88,7 +88,6 @@ contract(
           foreignswap.address,
           auction.address,
           staking.address,
-          bpd.address,
           subbalances,
         ],
         { from: setter }

@@ -13,10 +13,9 @@ contract Token is IToken, ERC20, AccessControl {
     bytes32 private constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 private constant SETTER_ROLE = keccak256("SETTER_ROLE");
 
-    address private swapToken;
+    IERC20 private swapToken;
     bool private swapIsOver;
-
-    mapping(address => uint256) private swapTokenBalanceOf;
+    uint256 private swapTokenBalance;
 
     modifier onlyMinter() {
         require(hasRole(MINTER_ROLE, _msgSender()), "Caller is not a minter");
@@ -35,16 +34,14 @@ contract Token is IToken, ERC20, AccessControl {
         address _setter
     ) public ERC20(_name, _symbol) {
         _setupRole(SETTER_ROLE, _setter);
-        swapToken = _swapToken;
+        swapToken = IERC20(_swapToken);
         swapIsOver = false;
     }
 
     function init(address[] calldata instances) external onlySetter {
+        require(instances.length == 5, "NativeSwap: wrong instances number");
+
         for (uint256 index = 0; index < instances.length; index++) {
-            require(
-                instances.length == 6,
-                "NativeSwap: wrong instances number"
-            );
             _setupRole(MINTER_ROLE, instances[index]);
         }
         renounceRole(SETTER_ROLE, _msgSender());
@@ -59,41 +56,33 @@ contract Token is IToken, ERC20, AccessControl {
         return SETTER_ROLE;
     }
 
-    function getSwapTOken() external view returns (address) {
+    function getSwapTOken() external view returns (IERC20) {
         return swapToken;
     }
 
-    function getSwapTokenBalanceOf(address account)
-        external
-        view
-        returns (uint256)
-    {
-        return swapTokenBalanceOf[account];
+    function getSwapTokenBalance(uint256) external view returns (uint256) {
+        return swapTokenBalance;
     }
 
     function initDeposit(uint256 _amount) external onlySetter {
-        IERC20(swapToken).transferFrom(_msgSender(), address(this), _amount);
-        swapTokenBalanceOf[_msgSender()] = swapTokenBalanceOf[_msgSender()].add(
-            _amount
+        require(
+            swapToken.transferFrom(_msgSender(), address(this), _amount),
+            "Token: transferFrom error"
         );
+        swapTokenBalance = swapTokenBalance.add(_amount);
     }
 
     function initWithdraw(uint256 _amount) external onlySetter {
-        require(
-            _amount >= swapTokenBalanceOf[_msgSender()],
-            "balance < amount"
-        );
-        swapTokenBalanceOf[_msgSender()] = swapTokenBalanceOf[_msgSender()].sub(
-            _amount
-        );
-        IERC20(swapToken).transfer(_msgSender(), _amount);
+        require(_amount >= swapTokenBalance, "balance < amount");
+        swapTokenBalance = swapTokenBalance.sub(_amount);
+        swapToken.transfer(_msgSender(), _amount);
     }
 
     function initSwap() external onlySetter {
         require(!swapIsOver, "swap is over");
-        uint256 balance = swapTokenBalanceOf[_msgSender()];
+        uint256 balance = swapTokenBalance;
+        swapTokenBalance = 0;
         require(balance > 0, "balance <= 0");
-        swapTokenBalanceOf[_msgSender()] = 0;
         _mint(_msgSender(), balance);
     }
 
