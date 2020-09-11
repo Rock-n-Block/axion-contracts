@@ -340,15 +340,15 @@ contract SubBalances is ISubBalances, AccessControl {
         uint256 inflation = uint256(8).mul(currentTokenTotalSupply.add(currentSharesTotalSupply)).div(36500);
 
         
-        uint256 criticalMassCoeff = IForeignSwap(foreignSwap).getCurrentClaimedAmount().div(
+        uint256 criticalMassCoeff = IForeignSwap(foreignSwap).getCurrentClaimedAmount().mul(1e18).div(
             IForeignSwap(foreignSwap).getTotalSnapshotAmount());
 
-       uint256 viralityCoeff = IForeignSwap(foreignSwap).getCurrentClaimedAddresses().div(
+       uint256 viralityCoeff = IForeignSwap(foreignSwap).getCurrentClaimedAddresses().mul(1e18).div(
             IForeignSwap(foreignSwap).getTotalSnapshotAddresses());
 
-        uint256 totalUprisingCoeff = uint256(1).add(criticalMassCoeff).add(viralityCoeff);
+        uint256 totalUprisingCoeff = uint256(1e18).add(criticalMassCoeff).add(viralityCoeff);
 
-        totalAmount = yearTokenAmount.add(inflation).mul(totalUprisingCoeff);
+        totalAmount = yearTokenAmount.add(inflation).mul(totalUprisingCoeff).div(1e18);
         addAmount = totalAmount.sub(yearTokenAmount);
     }
 
