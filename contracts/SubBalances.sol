@@ -15,8 +15,8 @@ import "./interfaces/ISubBalances.sol";
 contract SubBalances is ISubBalances, AccessControl {
 	using SafeMath for uint256;
 
-	bytes32 public constant CALLER_ROLE = keccak256("CALLER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
+    bytes32 public constant STAKING_ROLE = keccak256("CALLER_ROLE");
 
     struct StakeSession {
     	address staker;
@@ -71,12 +71,13 @@ contract SubBalances is ISubBalances, AccessControl {
         address _foreignSwap,
         address _bigPayDayPool,
         address _auction,
+        address _staking,
         uint256 _stepTimestamp,
         uint256 _basePeriod
     ) public
       onlySetter
     {
-    	require(hasRole(SETTER_ROLE, _msgSender()), "Caller is not a setter role");
+        _setupRole(STAKING_ROLE, _staking);
         mainToken = _mainToken;
         foreignSwap = _foreignSwap;
         bigPayDayPool = _bigPayDayPool;
@@ -221,6 +222,7 @@ contract SubBalances is ISubBalances, AccessControl {
         uint256 end,
         uint256 shares
     ) external override {
+        require(hasRole(STAKING_ROLE, _msgSender()), "SUBBALANCES: Caller is not a staking role");
         require(end > start, 'SUBBALANCES: Stake end must be after stake start');
         uint256 stakeDays = end.sub(start).div(stepTimestamp);
 
@@ -270,6 +272,8 @@ contract SubBalances is ISubBalances, AccessControl {
         external
         override
     {
+        (staker);
+        require(hasRole(STAKING_ROLE, _msgSender()), "SUBBALANCES: Caller is not a staking role");
         require(end > start, 'SUBBALANCES: Stake end must be after stake start');
         uint256 stakeDays = end.sub(start).div(stepTimestamp);
         uint256 realStakeEnd = now;
