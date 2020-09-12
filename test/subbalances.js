@@ -44,6 +44,7 @@ contract(
     setter,
     signer,
     nativeSwap,
+    stakingCaller,
     account1,
     account2
   ]) => {
@@ -51,7 +52,7 @@ contract(
     let token;
     let foreignswap;
     let auction;
-    let staking;
+    let stakingContract;
     let bpd;
     let signAmount;
     let testSignature;
@@ -73,7 +74,7 @@ contract(
       token = await Token.new("2X Token", "2X", swaptoken.address, setter);
 
       auction = await AuctionMock.new();
-      staking = await StakingMock.new();
+      stakingContract = await StakingMock.new();
 
       // Deploy foreign swap
       foreignswap = await ForeignSwap.new(setter);
@@ -90,7 +91,7 @@ contract(
           nativeSwap,
           foreignswap.address,
           auction.address,
-          staking.address,
+          stakingContract.address,
           subbalances.address,
         ],
         { from: setter }
@@ -103,7 +104,7 @@ contract(
         maxClaimAmount,
         token.address,
         auction.address,
-        staking.address,
+        stakingContract.address,
         bpd.address,
         totalSnapshotAmount,
         totalSnapshotAddresses,
@@ -124,6 +125,7 @@ contract(
         foreignswap.address,
         bpd.address,
         auction.address,
+        stakingCaller,
         new BN(DAY.toString(), 10),
         new BN("350"),
         { from: setter }
@@ -239,7 +241,8 @@ contract(
           stakeId,
           stakeStartTime,
           stakeEndTime,
-          signAmount
+          signAmount,
+          { from: stakingCaller }
         )
 
         const dividedAmount = signAmount.div(new BN("2"))
@@ -281,14 +284,15 @@ contract(
           stakeId,
           stakeStartTime,
           stakeEndTime,
-          signAmount
+          signAmount,
+          { from: stakingCaller }
         )
 
         const payoutAmountsBefore = await subbalances.calculateSessionPayout(stakeId); 
-        const payoutBefore = payoutAmountsBefore[0];
-        const penaltyBefore = payoutAmountsBefore[1];
-        console.log(payoutBefore.toString());
-        console.log(penaltyBefore.toString());
+        // const payoutBefore = payoutAmountsBefore[0];
+        // const penaltyBefore = payoutAmountsBefore[1];
+        // console.log(payoutBefore.toString());
+        // console.log(penaltyBefore.toString());
 
         await subbalances.generatePool();
 
@@ -309,10 +313,10 @@ contract(
         ).to.be.a.bignumber.that.above(yearOnePool);
 
         const payoutAmounts = await subbalances.calculateSessionPayout(stakeId); 
-        const payout = payoutAmountsBefore[0];
-        const penalty = payoutAmountsBefore[1];
-        console.log(payout.toString());
-        console.log(penalty.toString());
+        // const payout = payoutAmountsBefore[0];
+        // const penalty = payoutAmountsBefore[1];
+        // console.log(payout.toString());
+        // console.log(penalty.toString());
 
 
         const userBalanceBefore = await token.balanceOf(account1);
