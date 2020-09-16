@@ -128,7 +128,6 @@ contract Staking is IStaking, AccessControl {
         uint256 start = now;
         uint256 end = now.add(stakingDays.mul(stepTimestamp));
 
-        IToken(mainToken).burn(msg.sender, amount);
         _sessionsIds = _sessionsIds.add(1);
         uint256 sessionId = _sessionsIds;
         uint256 shares = _getStakersSharesAmount(amount, start, end);
