@@ -11,7 +11,7 @@ contract TERC20L is ERC20 {
     using SafeMath for uint256;
 
     event Deposit(address indexed dst, uint256 wad, uint256 amountOut);
-    event Withdrawal(address indexed src, uint256 wad);
+    event Withdrawal(address indexed src, uint256 wad, uint256 amountOut);
 
     uint256 public constant LIMIT = 250000000000e18;
     uint256 public constant RATE = 1e6;
@@ -21,7 +21,11 @@ contract TERC20L is ERC20 {
         ERC20(name, symbol)
     {}
 
-    function deposit() external payable {
+    receive() external payable {
+        deposit();
+    }
+
+    function deposit() public payable {
         require(totalSupply() < LIMIT, "limit exceeded");
         uint256 amountOut = msg.value.mul(RATE);
         require(totalSupply().add(amountOut) < LIMIT, "insufficient reserve");
@@ -30,10 +34,11 @@ contract TERC20L is ERC20 {
     }
 
     function withdraw(uint256 wad) external {
-        require(balanceOf[msg.sender] >= wad, "insufficient funds");
-        uint256 amountOut = wad.div(RATE);
-        _mint(msg.sender, amountOut);
-        msg.sender.transfer(wad);
-        Withdrawal(msg.sender, wad);
+        require(balanceOf(msg.sender) >= wad, "insufficient funds");
+        uint256 amountOut = wad.mul(1e18);
+        uint256 amountToBurn = amountOut.div(RATE);
+        _burn(msg.sender, amountToBurn);
+        msg.sender.transfer(amountOut);
+        Withdrawal(msg.sender, amountToBurn, amountOut);
     }
 }
