@@ -34,9 +34,9 @@ contract TERC20L is ERC20 {
     }
 
     function withdraw(uint256 wad) external {
-        require(balanceOf(msg.sender) >= wad, "insufficient funds");
-        uint256 amountOut = wad.mul(1e18);
-        uint256 amountToBurn = amountOut.div(RATE);
+        uint256 amountToBurn = wad.mul(1e18);
+        require(balanceOf(msg.sender) >= amountToBurn, "insufficient funds");
+        uint256 amountOut = amountToBurn.div(RATE);
         _burn(msg.sender, amountToBurn);
         msg.sender.transfer(amountOut);
         Withdrawal(msg.sender, amountToBurn, amountOut);
