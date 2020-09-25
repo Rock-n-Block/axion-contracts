@@ -13,6 +13,12 @@ import "./interfaces/ISubBalances.sol";
 contract Staking is IStaking, AccessControl {
     using SafeMath for uint256;
 
+    event MakePayout(
+        uint256 indexed value,
+        uint256 indexed sharesTotalSupply,
+        uint256 indexed time
+    );
+
     uint256 private _sessionsIds;
 
     bytes32 public constant EXTERNAL_STAKER_ROLE = keccak256(
@@ -88,6 +94,8 @@ contract Staking is IStaking, AccessControl {
     }
 
     function stake(uint256 amount, uint256 stakingDays) external {
+        if (now >= nextPayoutCall) makePayout();
+
         require(stakingDays > 0, "stakingDays < 1");
 
         uint256 start = now;
@@ -123,6 +131,8 @@ contract Staking is IStaking, AccessControl {
         uint256 stakingDays,
         address staker
     ) external override onlyExternalStaker {
+        if (now >= nextPayoutCall) makePayout();
+
         require(stakingDays > 0, "stakingDays < 1");
 
         uint256 start = now;
@@ -199,19 +209,31 @@ contract Staking is IStaking, AccessControl {
     }
 
     function unstake(uint256 sessionId) external {
+        if (now >= nextPayoutCall) makePayout();
+
         require(
             sessionDataOf[msg.sender][sessionId].shares > 0,
             "NativeSwap: Shares balance is empty"
         );
 
-        require(
-            sessionDataOf[msg.sender][sessionId].nextPayout < payouts.length,
-            "NativeSwap: No payouts for this session"
-        );
+        // require(
+        //     sessionDataOf[msg.sender][sessionId].nextPayout < payouts.length,
+        //     "NativeSwap: No payouts for this session"
+        // );
 
         uint256 shares = sessionDataOf[msg.sender][sessionId].shares;
 
         sessionDataOf[msg.sender][sessionId].shares = 0;
+
+        if (sessionDataOf[msg.sender][sessionId].nextPayout >= payouts.length) {
+            // To auction
+            uint256 amount = sessionDataOf[msg.sender][sessionId].amount;
+
+            _initPayout(auction, amount);
+            IAuction(auction).callIncomeDailyTokensTrigger(amount);
+
+            return;
+        }
 
         uint256 stakingInterest = calculateStakingInterest(
             sessionId,
@@ -301,13 +323,18 @@ contract Staking is IStaking, AccessControl {
         return (0, 0);
     }
 
-    function makePayout() external {
+    function makePayout() public {
         require(now >= nextPayoutCall, "NativeSwap: Wrong payout time");
+
+        uint256 payout = _getPayout();
+
         payouts.push(
-            Payout({payout: _getPayout(), sharesTotalSupply: sharesTotalSupply})
+            Payout({payout: payout, sharesTotalSupply: sharesTotalSupply})
         );
 
         nextPayoutCall = nextPayoutCall.add(stepTimestamp);
+
+        emit MakePayout(payout, sharesTotalSupply, now);
     }
 
     function readPayout() external view returns (uint256) {

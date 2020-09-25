@@ -12,6 +12,13 @@ import "./interfaces/IAuction.sol";
 contract Auction is IAuction, AccessControl {
     using SafeMath for uint256;
 
+    event Bet(
+        address indexed account,
+        uint256 value,
+        uint256 indexed auctionId,
+        uint256 indexed time
+    );
+
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant CALLER_ROLE = keccak256("CALLER_ROLE");
 
@@ -125,6 +132,8 @@ contract Auction is IAuction, AccessControl {
         );
 
         recipient.transfer(toRecipient);
+
+        emit Bet(msg.sender, msg.value, stepsFromStart, now);
     }
 
     function withdraw(uint256 auctionId) external {
