@@ -19,8 +19,9 @@ contract ForeignSwap is IForeignSwap, AccessControl {
 
     uint256 public start;
     uint256 public stepTimestamp;
+    uint256 public stakePeriod;
     uint256 public maxClaimAmount;
-    uint256 public constant PERIOD = 350;
+    // uint256 public constant PERIOD = 350;
 
     address public mainToken;
     address public staking;
@@ -47,6 +48,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
     function init(
         address _signer,
         uint256 _stepTimestamp,
+        uint256 _stakePeriod,
         uint256 _maxClaimAmount,
         address _mainToken,
         address _auction,
@@ -58,6 +60,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         signerAddress = _signer;
         start = now;
         stepTimestamp = _stepTimestamp;
+        stakePeriod = _stakePeriod;
         maxClaimAmount = _maxClaimAmount;
         mainToken = _mainToken;
         staking = _staking;
@@ -151,8 +154,8 @@ contract ForeignSwap is IForeignSwap, AccessControl {
             uint256 deltaAuctionWeekly
         ) = getClaimableAmount(amount);
 
-        uint256 deltaPart = delta.div(PERIOD);
-        uint256 deltaAuctionDaily = deltaPart.mul(PERIOD.sub(uint256(1)));
+        uint256 deltaPart = delta.div(stakePeriod);
+        uint256 deltaAuctionDaily = deltaPart.mul(stakePeriod.sub(uint256(1)));
 
         IToken(mainToken).mint(auction, deltaAuctionDaily);
         IAuction(auction).callIncomeDailyTokensTrigger(delta);
@@ -164,8 +167,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
 
         IToken(mainToken).mint(bigPayDayPool, deltaPart);
         IBPD(bigPayDayPool).callIncomeTokensTrigger(deltaPart);
-        IToken(mainToken).mint(_msgSender(), amountOut);
-        IStaking(staking).externalStake(amountOut, PERIOD, msg.sender);
+        IStaking(staking).externalStake(amountOut, stakePeriod, msg.sender);
 
         claimedBalanceOf[msg.sender] = amount;
         claimedAmount = claimedAmount.add(amount);
@@ -179,7 +181,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
     }
 
     // function calculateStakeEndTime(uint256 startTime) internal view returns (uint256) {
-    //     uint256 stakePeriod = stepTimestamp.mul(PERIOD);
+    //     uint256 stakePeriod = stepTimestamp.mul(stakePeriod);
     //     return  startTime.add(stakePeriod);
     // }
 
@@ -199,8 +201,8 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         }
 
         uint256 stepsFromStart = calculateStepsFromStart();
-        uint256 daysPassed = stepsFromStart > PERIOD ? PERIOD : stepsFromStart;
-        uint256 delta = amount.mul(daysPassed).div(PERIOD);
+        uint256 daysPassed = stepsFromStart > stakePeriod ? stakePeriod : stepsFromStart;
+        uint256 delta = amount.mul(daysPassed).div(stakePeriod);
         uint256 amountOut = amount.sub(delta);
 
         return (amountOut, delta, deltaAuctionWeekly);

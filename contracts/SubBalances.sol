@@ -83,6 +83,7 @@ contract SubBalances is ISubBalances, AccessControl {
         bigPayDayPool = _bigPayDayPool;
         auction = _auction;
         stepTimestamp = _stepTimestamp;
+        basePeriod = _basePeriod;
     	startTimestamp = now;
 
     	for (uint256 i = 0; i < subBalanceList.length; i++) {
@@ -155,18 +156,33 @@ contract SubBalances is ISubBalances, AccessControl {
         StakeSession storage stakeSession = stakeSessions[sessionId];
 
         uint256 subBalancePayoutAmount;
+        uint256[5] memory bpdRawAmounts = IBPD(bigPayDayPool).getPoolYearAmounts();
         for (uint256 i = 0; i < subBalanceList.length; i++) {
             SubBalance storage subBalance = subBalanceList[i];
 
+            uint256 subBalanceAmount;
+            uint256 addAmount;
+            if (subBalance.minted) {
+                subBalanceAmount = subBalance.totalWithdrawAmount;
+            } else {
+                (subBalanceAmount, addAmount) = _bpdAmountFromRaw(bpdRawAmounts[i]);
+            }
             if (stakeSession.payDayEligible[i]) {
-                uint256 stakerShare = stakeSession.shares.div(subBalance.totalShares);
-                uint256 stakerAmount = subBalance.totalWithdrawAmount.mul(stakerShare);
+                uint256 stakerShare = stakeSession.shares.mul(1e18).div(subBalance.totalShares);
+                uint256 stakerAmount = subBalanceAmount.mul(stakerShare).div(1e18);
                 subBalancePayoutAmount = subBalancePayoutAmount.add(stakerAmount);
             }
         }
 
         uint256 stakingDays = stakeSession.end.sub(stakeSession.start).div(stepTimestamp);
-        uint256 daysStaked = stakeSession.finishTime.sub(stakeSession.start).div(stepTimestamp);
+        uint256 stakeEnd;
+        if (stakeSession.finishTime != 0) {
+            stakeEnd = stakeSession.finishTime;
+        } else {
+            stakeEnd = stakeSession.end;
+        }
+
+        uint256 daysStaked = stakeEnd.sub(stakeSession.start).div(stepTimestamp);
 
         // Early unstaked
         if (stakingDays > daysStaked) {
@@ -227,7 +243,7 @@ contract SubBalances is ISubBalances, AccessControl {
         uint256 stakeDays = end.sub(start).div(stepTimestamp);
 
         // Skipping user if period less that year
-        if (stakeDays > basePeriod) {
+        if (stakeDays >= basePeriod) {
 
             // Setting pay day eligibility for user in advance when he stakes
             bool[5] memory stakerPayDays;
@@ -279,7 +295,7 @@ contract SubBalances is ISubBalances, AccessControl {
         uint256 realStakeEnd = now;
         // uint256 daysStaked = realStakeEnd.sub(stakeStart).div(stepTimestamp);
 
-        if (stakeDays > basePeriod) {
+        if (stakeDays >= basePeriod) {
             StakeSession storage stakeSession = stakeSessions[sessionId];
 
             // Rechecking eligibility of paydays
