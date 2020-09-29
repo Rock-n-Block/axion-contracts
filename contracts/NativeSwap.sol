@@ -11,6 +11,7 @@ contract NativeSwap {
     using SafeMath for uint256;
 
     uint256 public start;
+    uint256 public period;
     uint256 public stepTimestamp;
     IERC20 public swapToken;
     IToken public mainToken;
@@ -25,12 +26,14 @@ contract NativeSwap {
     }
 
     function init(
+        uint256 _period,
         uint256 _stepTimestamp,
         address _swapToken,
         address _mainToken,
         address _auction
     ) external {
         require(!init_, "init is active");
+        period = _period;
         stepTimestamp = _stepTimestamp;
         swapToken = IERC20(_swapToken);
         mainToken = IToken(_mainToken);
@@ -58,6 +61,8 @@ contract NativeSwap {
     }
 
     function swapNativeToken() external {
+        uint256 stepsFromStart = calculateStepsFromStart();
+        require(stepsFromStart <= period, "swapNativeToken: swap is over");
         uint256 amount = swapTokenBalanceOf[msg.sender];
         uint256 deltaPenalty = calculateDeltaPenalty(amount);
         uint256 amountOut = amount.sub(deltaPenalty);
@@ -74,8 +79,8 @@ contract NativeSwap {
         returns (uint256)
     {
         uint256 stepsFromStart = calculateStepsFromStart();
-        if (stepsFromStart > 350) return amount;
-        return amount.mul(stepsFromStart).div(350);
+        if (stepsFromStart > period) return amount;
+        return amount.mul(stepsFromStart).div(period);
     }
 
     function calculateStepsFromStart() public view returns (uint256) {

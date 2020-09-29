@@ -281,13 +281,14 @@ contract Auction is IAuction, AccessControl {
         path[0] = IUniswapV2Router02(uniswap).WETH();
         path[1] = mainToken;
 
-        uint256[] memory amountsOut = IUniswapV2Router02(uniswap).getAmountsOut(
-            amount,
-            path
-        );
+        // uint256[] memory amountsOut = IUniswapV2Router02(uniswap).getAmountsOut(
+        //     amount,
+        //     path
+        // );
 
         IUniswapV2Router02(uniswap).swapExactETHForTokens{value: amount}(
-            amountsOut[1],
+            // amountsOut[1],
+            0,
             path,
             staking,
             deadline

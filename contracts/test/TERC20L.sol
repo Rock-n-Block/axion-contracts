@@ -10,16 +10,24 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 contract TERC20L is ERC20 {
     using SafeMath for uint256;
 
-    event Deposit(address indexed dst, uint256 wad, uint256 amountOut);
-    event Withdrawal(address indexed src, uint256 wad, uint256 amountOut);
+    event Deposit(address indexed sender, uint256 amountIn, uint256 amountOut);
+    event Withdrawal(
+        address indexed sender,
+        uint256 amountIn,
+        uint256 amountOut
+    );
 
     uint256 public constant LIMIT = 250000000000e18;
     uint256 public constant RATE = 1e6;
 
-    constructor(string memory name, string memory symbol)
-        public
-        ERC20(name, symbol)
-    {}
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint256 initMintAmount,
+        address initMintRecipient
+    ) public ERC20(name, symbol) {
+        _mint(initMintRecipient, initMintAmount);
+    }
 
     receive() external payable {
         deposit();
