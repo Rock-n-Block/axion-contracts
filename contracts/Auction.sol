@@ -5,7 +5,7 @@ pragma solidity >=0.4.25 <0.7.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "./interfaces/IUniswapV2Router02.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./interfaces/IToken.sol";
 import "./interfaces/IAuction.sol";
 
@@ -281,13 +281,7 @@ contract Auction is IAuction, AccessControl {
         path[0] = IUniswapV2Router02(uniswap).WETH();
         path[1] = mainToken;
 
-        // uint256[] memory amountsOut = IUniswapV2Router02(uniswap).getAmountsOut(
-        //     amount,
-        //     path
-        // );
-
         IUniswapV2Router02(uniswap).swapExactETHForTokens{value: amount}(
-            // amountsOut[1],
             0,
             path,
             staking,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity >=0.4.25 <0.7.0;
 
 import "../interfaces/IBPD.sol";
@@ -7,15 +9,17 @@ contract BPDMock is IBPD {
         external
         override
     {}
+
     function transferYearlyPool(uint256 poolNumber)
-    	external
-    	override
-    	returns (uint256)
+        external
+        override
+        returns (uint256)
     {}
+
     function getPoolYearAmounts()
         external
-        view
         override
+        view
         returns (uint256[5] memory poolAmounts)
     {}
 }

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-// Rinkeby faucet: https://faucet.rinkeby.io/
-
 pragma solidity ^0.6.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
