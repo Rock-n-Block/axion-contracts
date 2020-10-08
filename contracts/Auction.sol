@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./interfaces/IToken.sol";
 import "./interfaces/IAuction.sol";
+import "./interfaces/IStaking.sol";
 
 contract Auction is IAuction, AccessControl {
     using SafeMath for uint256;
@@ -18,6 +19,15 @@ contract Auction is IAuction, AccessControl {
         uint256 indexed auctionId,
         uint256 indexed time
     );
+
+    event Withdraval(
+        address indexed account,
+        uint256 value,
+        uint256 indexed auctionId,
+        uint256 indexed time
+    );
+
+    event AuctionIsOver(uint256 eth, uint256 token, uint256 indexed auctionId);
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant CALLER_ROLE = keccak256("CALLER_ROLE");
@@ -37,6 +47,7 @@ contract Auction is IAuction, AccessControl {
     mapping(uint256 => mapping(address => UserBet)) public auctionBetOf;
     mapping(uint256 => mapping(address => bool)) public existAuctionsOf;
 
+    uint256 public lastAuctionEventId;
     uint256 public start;
     uint256 public stepTimestamp;
     uint256 public uniswapPercent;
@@ -85,7 +96,7 @@ contract Auction is IAuction, AccessControl {
         _setupRole(CALLER_ROLE, _subbalances);
         start = now;
         stepTimestamp = _stepTimestamp;
-        uniswapPercent = 10;
+        uniswapPercent = 20;
         mainToken = _mainToken;
         staking = _staking;
         uniswap = _uniswap;
@@ -106,6 +117,8 @@ contract Auction is IAuction, AccessControl {
     }
 
     function bet(uint256 deadline, address ref) external payable {
+        _saveAuctionData();
+
         require(_msgSender() != ref, "msg.sender == ref");
 
         (
@@ -139,6 +152,8 @@ contract Auction is IAuction, AccessControl {
     }
 
     function withdraw(uint256 auctionId) external {
+        _saveAuctionData();
+
         uint256 stepsFromStart = calculateStepsFromStart();
 
         require(stepsFromStart > auctionId, "auction is active");
@@ -168,20 +183,33 @@ contract Auction is IAuction, AccessControl {
         }
 
         if (address(auctionBetOf[auctionId][_msgSender()].ref) == address(0)) {
-            IERC20(mainToken).transfer(_msgSender(), payout);
+            IToken(mainToken).burn(address(this), payout);
+
+            IStaking(staking).externalStake(
+                payout.add(payout),
+                14,
+                _msgSender()
+            );
+
+            emit Withdraval(msg.sender, payout, stepsFromStart, now);
         } else {
-            IERC20(mainToken).transfer(_msgSender(), payout);
+            IToken(mainToken).burn(address(this), payout);
 
             (
                 uint256 toRefMintAmount,
                 uint256 toUserMintAmount
             ) = _calculateRefAndUserAmountsToMint(payout);
 
-            IToken(mainToken).mint(_msgSender(), toUserMintAmount);
+            payout = payout.add(toUserMintAmount);
 
-            IToken(mainToken).mint(
-                auctionBetOf[auctionId][_msgSender()].ref,
-                toRefMintAmount
+            IStaking(staking).externalStake(payout, 14, _msgSender());
+
+            emit Withdraval(msg.sender, payout, stepsFromStart, now);
+
+            IStaking(staking).externalStake(
+                toRefMintAmount,
+                14,
+                auctionBetOf[auctionId][_msgSender()].ref
             );
         }
     }
@@ -289,5 +317,15 @@ contract Auction is IAuction, AccessControl {
             staking,
             deadline
         );
+    }
+
+    function _saveAuctionData() internal {
+        uint256 stepsFromStart = calculateStepsFromStart();
+        AuctionReserves memory reserves = reservesOf[stepsFromStart];
+
+        if (lastAuctionEventId < stepsFromStart) {
+            emit AuctionIsOver(reserves.eth, reserves.token, stepsFromStart);
+            lastAuctionEventId = stepsFromStart;
+        }
     }
 }

@@ -75,6 +75,7 @@ contract Staking is IStaking, AccessControl {
     ) external {
         require(!init_, "NativeSwap: init is active");
         _setupRole(EXTERNAL_STAKER_ROLE, _foreignSwap);
+        _setupRole(EXTERNAL_STAKER_ROLE, _auction);
         mainToken = _mainToken;
         auction = _auction;
         subBalances = _subBalances;
