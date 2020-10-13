@@ -15,6 +15,11 @@ import "./interfaces/ISubBalances.sol";
 contract SubBalances is ISubBalances, AccessControl {
 	using SafeMath for uint256;
 
+    event PoolCreated(
+        uint256 paydayTime,
+        uint256 poolAmount
+    );
+
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("CALLER_ROLE");
 
@@ -342,6 +347,8 @@ contract SubBalances is ISubBalances, AccessControl {
     			IToken(mainToken).mint(address(this), addAmount);
     			subBalance.totalWithdrawAmount = bpdTokens;
     			subBalance.minted = true;
+
+                emit PoolCreated(now, bpdTokens);
                 return true;
     		}
     	}

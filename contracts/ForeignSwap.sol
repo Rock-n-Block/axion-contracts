@@ -15,6 +15,13 @@ import "./interfaces/IForeignSwap.sol";
 contract ForeignSwap is IForeignSwap, AccessControl {
     using SafeMath for uint256;
 
+    event TokensClaimed(
+        address indexed account,
+        uint256 indexed stepsFromStart,
+        uint256 userAmount,
+        uint256 penaltyuAmount
+    );
+
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
 
     uint256 public start;
@@ -172,6 +179,8 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         claimedBalanceOf[msg.sender] = amount;
         claimedAmount = claimedAmount.add(amount);
         claimedAddresses = claimedAddresses.add(uint256(1));
+
+        emit TokensClaimed(msg.sender, calculateStepsFromStart(), amountOut, deltaPart);
 
         return true;
     }
