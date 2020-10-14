@@ -4,3 +4,4 @@ coverage.json
 node_modules
 package-lock.json
 dist
+.vscode
