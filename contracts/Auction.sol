@@ -134,7 +134,7 @@ contract Auction is IAuction, AccessControl {
         return price;
     }
 
-   function getUniswapMiddlePriceForSevenDays() public view returns (uint256) {
+    function getUniswapMiddlePriceForSevenDays() public view returns (uint256) {
         uint256 stepsFromStart = calculateStepsFromStart();
 
         uint256 index = stepsFromStart;
@@ -149,7 +149,7 @@ contract Auction is IAuction, AccessControl {
 
             if (index == 0) break;
 
-            index.sub(1);
+            index = index.sub(1);
         }
 
         if (sum == 0) return getUniswapLastPrice();
