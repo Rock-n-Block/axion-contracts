@@ -11,6 +11,7 @@ contract Token is IToken, ERC20, AccessControl {
     using SafeMath for uint256;
 
     bytes32 private constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 private constant SWAPPER_ROLE = keccak256("SWAPPER_ROLE");
     bytes32 private constant SETTER_ROLE = keccak256("SETTER_ROLE");
 
     IERC20 private swapToken;
@@ -27,12 +28,19 @@ contract Token is IToken, ERC20, AccessControl {
         _;
     }
 
+    modifier onlySwapper() {
+        require(hasRole(SWAPPER_ROLE, _msgSender()), "Caller is not a swapper");
+        _;
+    }
+
     constructor(
         string memory _name,
         string memory _symbol,
         address _swapToken,
+        address _swapper,
         address _setter
     ) public ERC20(_name, _symbol) {
+        _setupRole(SWAPPER_ROLE, _swapper);
         _setupRole(SETTER_ROLE, _setter);
         swapToken = IERC20(_swapToken);
         swapIsOver = false;
@@ -52,6 +60,10 @@ contract Token is IToken, ERC20, AccessControl {
         return MINTER_ROLE;
     }
 
+    function getSwapperRole() external pure returns (bytes32) {
+        return SWAPPER_ROLE;
+    }
+
     function getSetterRole() external pure returns (bytes32) {
         return SETTER_ROLE;
     }
@@ -64,7 +76,7 @@ contract Token is IToken, ERC20, AccessControl {
         return swapTokenBalance;
     }
 
-    function initDeposit(uint256 _amount) external onlySetter {
+    function initDeposit(uint256 _amount) external onlySwapper {
         require(
             swapToken.transferFrom(_msgSender(), address(this), _amount),
             "Token: transferFrom error"
@@ -72,13 +84,13 @@ contract Token is IToken, ERC20, AccessControl {
         swapTokenBalance = swapTokenBalance.add(_amount);
     }
 
-    function initWithdraw(uint256 _amount) external onlySetter {
+    function initWithdraw(uint256 _amount) external onlySwapper {
         require(_amount >= swapTokenBalance, "balance < amount");
         swapTokenBalance = swapTokenBalance.sub(_amount);
         swapToken.transfer(_msgSender(), _amount);
     }
 
-    function initSwap() external onlySetter {
+    function initSwap() external onlySwapper {
         require(!swapIsOver, "swap is over");
         uint256 balance = swapTokenBalance;
         swapTokenBalance = 0;
