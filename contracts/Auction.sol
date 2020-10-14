@@ -35,6 +35,8 @@ contract Auction is IAuction, AccessControl {
     struct AuctionReserves {
         uint256 eth;
         uint256 token;
+        uint256 uniswapLastPrice;
+        uint256 uniswapMiddlePrice;
     }
 
     struct UserBet {
@@ -46,6 +48,8 @@ contract Auction is IAuction, AccessControl {
     mapping(address => uint256[]) public auctionsOf;
     mapping(uint256 => mapping(address => UserBet)) public auctionBetOf;
     mapping(uint256 => mapping(address => bool)) public existAuctionsOf;
+
+    uint256[] public prices;
 
     uint256 public lastAuctionEventId;
     uint256 public start;
@@ -116,8 +120,54 @@ contract Auction is IAuction, AccessControl {
         uniswapPercent = percent;
     }
 
+    function getUniswapLastPrice() public view returns (uint256) {
+        address[] memory path = new address[](2);
+
+        path[0] = IUniswapV2Router02(uniswap).WETH();
+        path[1] = mainToken;
+
+        uint256 price = IUniswapV2Router02(uniswap).getAmountsOut(
+            1e18,
+            path
+        )[1];
+
+        return price;
+    }
+
+    function getUniswapMiddlePriceForSevenDays() public view returns (uint256) {
+        uint256 stepsFromStart = calculateStepsFromStart();
+
+        uint256 index = stepsFromStart;
+        uint256 sum;
+        uint256 points;
+
+        while (index >= 0 || points != 7) {
+            if (reservesOf[stepsFromStart].uniswapLastPrice != 0) {
+                sum = sum.add(reservesOf[stepsFromStart].uniswapLastPrice);
+                points = points.add(1);
+            }
+
+            if (index == 0) break;
+
+            index.sub(1);
+        }
+
+        if (sum == 0) return getUniswapLastPrice();
+        else return sum.div(points);
+    }
+
+    function _updatePrice() internal {
+        uint256 stepsFromStart = calculateStepsFromStart();
+
+        reservesOf[stepsFromStart].uniswapLastPrice = getUniswapLastPrice();
+
+        reservesOf[stepsFromStart]
+            .uniswapMiddlePrice = getUniswapMiddlePriceForSevenDays();
+    }
+
     function bet(uint256 deadline, address ref) external payable {
         _saveAuctionData();
+        _updatePrice();
 
         require(_msgSender() != ref, "msg.sender == ref");
 
@@ -153,6 +203,7 @@ contract Auction is IAuction, AccessControl {
 
     function withdraw(uint256 auctionId) external {
         _saveAuctionData();
+        _updatePrice();
 
         uint256 stepsFromStart = calculateStepsFromStart();
 
@@ -168,6 +219,7 @@ contract Auction is IAuction, AccessControl {
         uint256 payout = _calculatePayout(auctionId, auctionETHUserBalance);
 
         uint256 uniswapPayoutWithPercent = _calculatePayoutWithUniswap(
+            auctionId,
             auctionETHUserBalance,
             payout
         );
@@ -247,20 +299,14 @@ contract Auction is IAuction, AccessControl {
         return now.sub(start).div(stepTimestamp);
     }
 
-    function _calculatePayoutWithUniswap(uint256 amount, uint256 payout)
-        internal
-        view
-        returns (uint256)
-    {
-        address[] memory path = new address[](2);
-
-        path[0] = IUniswapV2Router02(uniswap).WETH();
-        path[1] = mainToken;
-
-        uint256 uniswapPayout = IUniswapV2Router02(uniswap).getAmountsOut(
-            amount,
-            path
-        )[1];
+    function _calculatePayoutWithUniswap(
+        uint256 auctionId,
+        uint256 amount,
+        uint256 payout
+    ) internal view returns (uint256) {
+        uint256 uniswapPayout = reservesOf[auctionId].uniswapMiddlePrice.mul(
+            amount
+        );
 
         uint256 uniswapPayoutWithPercent = uniswapPayout.add(
             uniswapPayout.mul(uniswapPercent).div(100)
