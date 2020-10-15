@@ -237,11 +237,7 @@ contract Auction is IAuction, AccessControl {
         if (address(auctionBetOf[auctionId][_msgSender()].ref) == address(0)) {
             IToken(mainToken).burn(address(this), payout);
 
-            IStaking(staking).externalStake(
-                payout.add(payout),
-                14,
-                _msgSender()
-            );
+            IStaking(staking).externalStake(payout, 14, _msgSender());
 
             emit Withdraval(msg.sender, payout, stepsFromStart, now);
         } else {
