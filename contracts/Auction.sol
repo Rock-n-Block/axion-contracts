@@ -127,7 +127,7 @@ contract Auction is IAuction, AccessControl {
         path[1] = mainToken;
 
         uint256 price = IUniswapV2Router02(uniswap).getAmountsOut(
-            1e18,
+            1,
             path
         )[1];
 
