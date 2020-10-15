@@ -10,6 +10,13 @@ import "./interfaces/IAuction.sol";
 contract NativeSwap {
     using SafeMath for uint256;
 
+    event TokensSwapped(
+        address indexed account,
+        uint256 indexed stepsFromStart,
+        uint256 userAmount,
+        uint256 penaltyAmount
+    );
+
     uint256 public start;
     uint256 public period;
     uint256 public stepTimestamp;
@@ -71,6 +78,8 @@ contract NativeSwap {
         mainToken.mint(address(auction), deltaPenalty);
         auction.callIncomeDailyTokensTrigger(deltaPenalty);
         mainToken.mint(msg.sender, amountOut);
+
+        emit TokensSwapped(msg.sender, stepsFromStart, amount, deltaPenalty);
     }
 
     function calculateDeltaPenalty(uint256 amount)
