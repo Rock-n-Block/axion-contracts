@@ -49,8 +49,6 @@ contract Auction is IAuction, AccessControl {
     mapping(uint256 => mapping(address => UserBet)) public auctionBetOf;
     mapping(uint256 => mapping(address => bool)) public existAuctionsOf;
 
-    uint256[] public prices;
-
     uint256 public lastAuctionEventId;
     uint256 public start;
     uint256 public stepTimestamp;
@@ -141,7 +139,7 @@ contract Auction is IAuction, AccessControl {
         uint256 sum;
         uint256 points;
 
-        while (index >= 0 || points != 7) {
+        while (points != 7) {
             if (reservesOf[index].uniswapLastPrice != 0) {
                 sum = sum.add(reservesOf[index].uniswapLastPrice);
                 points = points.add(1);
@@ -237,11 +235,7 @@ contract Auction is IAuction, AccessControl {
         if (address(auctionBetOf[auctionId][_msgSender()].ref) == address(0)) {
             IToken(mainToken).burn(address(this), payout);
 
-            IStaking(staking).externalStake(
-                payout.add(payout),
-                14,
-                _msgSender()
-            );
+            IStaking(staking).externalStake(payout, 14, _msgSender());
 
             emit Withdraval(msg.sender, payout, stepsFromStart, now);
         } else {
@@ -304,9 +298,10 @@ contract Auction is IAuction, AccessControl {
         uint256 amount,
         uint256 payout
     ) internal view returns (uint256) {
-        uint256 uniswapPayout = reservesOf[auctionId].uniswapMiddlePrice.mul(
-            amount
-        );
+        uint256 uniswapPayout = reservesOf[auctionId]
+            .uniswapMiddlePrice
+            .mul(amount)
+            .div(1e18);
 
         uint256 uniswapPayoutWithPercent = uniswapPayout.add(
             uniswapPayout.mul(uniswapPercent).div(100)

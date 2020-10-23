@@ -13,6 +13,24 @@ import "./interfaces/ISubBalances.sol";
 contract Staking is IStaking, AccessControl {
     using SafeMath for uint256;
 
+    event Stake(
+        address indexed account,
+        uint256 indexed sessionId,
+        uint256 amount,
+        uint256 start,
+        uint256 end,
+        uint256 shares
+    );
+
+    event Unstake(
+        address indexed account,
+        uint256 indexed sessionId,
+        uint256 amount,
+        uint256 start,
+        uint256 end,
+        uint256 shares
+    );
+
     event MakePayout(
         uint256 indexed value,
         uint256 indexed sharesTotalSupply,
@@ -125,6 +143,8 @@ contract Staking is IStaking, AccessControl {
             end,
             shares
         );
+
+        emit Stake(msg.sender, sessionId, amount, start, end, shares);
     }
 
     function externalStake(
@@ -161,6 +181,8 @@ contract Staking is IStaking, AccessControl {
             end,
             shares
         );
+
+        emit Stake(staker, sessionId, amount, start, end, shares);
     }
 
     function _initPayout(address to, uint256 amount) internal {
@@ -217,11 +239,6 @@ contract Staking is IStaking, AccessControl {
             "NativeSwap: Shares balance is empty"
         );
 
-        // require(
-        //     sessionDataOf[msg.sender][sessionId].nextPayout < payouts.length,
-        //     "NativeSwap: No payouts for this session"
-        // );
-
         uint256 shares = sessionDataOf[msg.sender][sessionId].shares;
 
         sessionDataOf[msg.sender][sessionId].shares = 0;
@@ -232,6 +249,15 @@ contract Staking is IStaking, AccessControl {
 
             _initPayout(auction, amount);
             IAuction(auction).callIncomeDailyTokensTrigger(amount);
+
+            emit Unstake(
+                msg.sender,
+                sessionId,
+                amount,
+                sessionDataOf[msg.sender][sessionId].start,
+                sessionDataOf[msg.sender][sessionId].end,
+                shares
+            );
 
             return;
         }
@@ -257,6 +283,15 @@ contract Staking is IStaking, AccessControl {
 
         // To account
         _initPayout(msg.sender, amountOut);
+
+        emit Unstake(
+            msg.sender,
+            sessionId,
+            amountOut,
+            sessionDataOf[msg.sender][sessionId].start,
+            sessionDataOf[msg.sender][sessionId].end,
+            shares
+        );
 
         ISubBalances(subBalances).callOutcomeStakerTrigger(
             msg.sender,
