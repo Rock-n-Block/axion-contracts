@@ -118,26 +118,6 @@ contract Auction is IAuction, AccessControl {
         uniswapPercent = percent;
     }
 
-    function getAllLastPrices() external view returns (uint256[] memory) {
-        uint256 stepsFromStart = calculateStepsFromStart();
-
-        uint256[] memory p = new uint256[](stepsFromStart);
-
-        for (uint256 index = 0; index <= stepsFromStart; index++) {
-            p[index] = reservesOf[index].uniswapLastPrice;
-        }
-    }
-
-    function getAllMiddlePrices() external view returns (uint256[] memory) {
-        uint256 stepsFromStart = calculateStepsFromStart();
-
-        uint256[] memory p = new uint256[](stepsFromStart);
-
-        for (uint256 index = 0; index <= stepsFromStart; index++) {
-            p[index] = reservesOf[index].uniswapMiddlePrice;
-        }
-    }
-
     function getUniswapLastPrice() public view returns (uint256) {
         address[] memory path = new address[](2);
 
