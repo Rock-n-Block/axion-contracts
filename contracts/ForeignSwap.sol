@@ -165,7 +165,7 @@ contract ForeignSwap is IForeignSwap, AccessControl {
         uint256 deltaAuctionDaily = deltaPart.mul(stakePeriod.sub(uint256(1)));
 
         IToken(mainToken).mint(auction, deltaAuctionDaily);
-        IAuction(auction).callIncomeDailyTokensTrigger(delta);
+        IAuction(auction).callIncomeDailyTokensTrigger(deltaAuctionDaily);
 
         if (deltaAuctionWeekly > 0) {
             IToken(mainToken).mint(auction, deltaAuctionWeekly);
