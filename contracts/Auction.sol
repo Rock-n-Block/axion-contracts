@@ -159,7 +159,7 @@ contract Auction is IAuction, AccessControl {
         uint256 sum;
         uint256 points;
 
-        while (index >= 0 || points != 7) {
+        while (points != 7) {
             if (reservesOf[index].uniswapLastPrice != 0) {
                 sum = sum.add(reservesOf[index].uniswapLastPrice);
                 points = points.add(1);
