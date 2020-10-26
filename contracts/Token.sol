@@ -85,7 +85,7 @@ contract Token is IToken, ERC20, AccessControl {
     }
 
     function initWithdraw(uint256 _amount) external onlySwapper {
-        require(_amount >= swapTokenBalance, "balance < amount");
+        require(_amount <= swapTokenBalance, "amount > balance");
         swapTokenBalance = swapTokenBalance.sub(_amount);
         swapToken.transfer(_msgSender(), _amount);
     }
