@@ -7,7 +7,7 @@ chai.use(require("chai-bn")(BN));
 const EthCrypto = require("eth-crypto");
 
 
-const TERC20 = artifacts.require("TERC20");
+const TERC20 = artifacts.require("TERC20L");
 const Token = artifacts.require("Token");
 const ForeignSwap = artifacts.require("ForeignSwap");
 const AuctionMock = artifacts.require("AuctionMock");
@@ -68,10 +68,14 @@ contract(
         [signAmount.toString(), account1]
       );
 
-      swaptoken = await TERC20.new("2T Token", "2T", web3.utils.toWei("1000"), {
-        from: bank,
-      });
-      token = await Token.new("2X Token", "2X", swaptoken.address, setter);
+      swaptoken = await TERC20.new(
+	"2T Token",
+	"2T",
+	web3.utils.toWei("1000"), 
+	bank, 
+	{from: bank}
+      );
+      token = await Token.new("2X Token", "2X", swaptoken.address, setter, setter);
 
       auction = await AuctionMock.new();
       staking = await StakingMock.new();

@@ -71,8 +71,15 @@ contract BPD is IBPD, AccessControl {
         // Divide income to years
         uint256 part = incomeAmountToken.div(PERCENT_DENOMINATOR);
 
+        uint256 remainderPart = incomeAmountToken;
         for (uint256 i = 0; i < poolYearAmounts.length; i++) {
-            poolYearAmounts[i] = poolYearAmounts[i].add(part.mul(poolYearPercentages[i]));
+            if (i != poolYearAmounts.length - 1) {
+                uint256 poolPart = part.mul(poolYearPercentages[i]);
+                poolYearAmounts[i] = poolYearAmounts[i].add(poolPart);
+                remainderPart = remainderPart.sub(poolPart);
+            } else {
+                poolYearAmounts[i] = poolYearAmounts[i].add(remainderPart);
+            }
         }
     }
 

@@ -7,7 +7,7 @@ chai.use(require("chai-bn")(BN));
 const EthCrypto = require("eth-crypto");
 
 
-const TERC20 = artifacts.require("TERC20");
+const TERC20 = artifacts.require("TERC20L");
 const Token = artifacts.require("Token");
 const ForeignSwap = artifacts.require("ForeignSwap");
 const AuctionMock = artifacts.require("AuctionMock");
@@ -68,10 +68,14 @@ contract(
         [signAmount.toString(), account1]
       );
 
-      swaptoken = await TERC20.new("2T Token", "2T", web3.utils.toWei("1000"), {
-        from: bank,
-      });
-      token = await Token.new("2X Token", "2X", swaptoken.address, setter);
+      swaptoken = await TERC20.new(
+	"2T Token",
+	"2T",
+	web3.utils.toWei("1000"), 
+	bank, 
+	{from: bank}
+      );
+      token = await Token.new("2X Token", "2X", swaptoken.address, setter, setter);
 
       auction = await AuctionMock.new();
       staking = await StakingMock.new();
@@ -188,7 +192,7 @@ contract(
         ).to.be.a.bignumber.that.equals(bpdAmountPercent.mul(new BN("25")));
         expect(
             currentPoolAmounts[4]
-        ).to.be.a.bignumber.that.equals(bpdAmountPercent.mul(new BN("30")));
+        ).to.be.a.bignumber.that.above(bpdAmountPercent.mul(new BN("30")));
         expect(
             await bpd.getClosestPoolAmount()
         ).to.be.a.bignumber.that.equals(bpdAmountPercent.mul(new BN("10")));
@@ -253,7 +257,7 @@ contract(
         ).to.be.a.bignumber.that.equals(fourthYearBalance);
         expect(
             currentPoolAmounts[4]
-        ).to.be.a.bignumber.that.equals(fifthYearBalance);
+        ).to.be.a.bignumber.that.above(fifthYearBalance);
         
         expect(
             await bpd.getClosestPoolAmount()
@@ -314,7 +318,7 @@ contract(
 
         expect(
             await bpd.getClosestPoolAmount()
-        ).to.be.a.bignumber.that.equals(bpdAmountPercent.mul(new BN("30")));
+        ).to.be.a.bignumber.that.above(bpdAmountPercent.mul(new BN("30")));
 
         await bpd.transferYearlyPool(
             new BN("4"),
@@ -324,7 +328,7 @@ contract(
         const fifthAmount = fourthAmount.add(fifthYearBalance)
         expect(
             await token.balanceOf(subbalances)
-        ).to.be.a.bignumber.that.equals(fifthAmount);
+        ).to.be.a.bignumber.that.above(fifthAmount);
 
         expect(
             await bpd.getClosestPoolAmount()
