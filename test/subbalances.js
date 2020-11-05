@@ -7,7 +7,7 @@ chai.use(require("chai-bn")(BN));
 const EthCrypto = require("eth-crypto");
 
 
-const TERC20 = artifacts.require("TERC20L");
+const TERC20 = artifacts.require("TERC20");
 const Token = artifacts.require("Token");
 const ForeignSwap = artifacts.require("ForeignSwap");
 const AuctionMock = artifacts.require("AuctionMock");
