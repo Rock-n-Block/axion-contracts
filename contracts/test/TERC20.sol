@@ -5,7 +5,7 @@ pragma solidity ^0.6.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
-contract TERC20L is ERC20 {
+contract TERC20 is ERC20 {
     using SafeMath for uint256;
 
     event Deposit(address indexed sender, uint256 amountIn, uint256 amountOut);
