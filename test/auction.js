@@ -66,11 +66,11 @@ contract(
       staking = await StakingMock.new();
 
       await token.init([
-        dailyauction.address,
         nativeswap.address,
+        foreignSwap,
+        staking.address,
         dailyauction.address,
-        dailyauction.address,
-        dailyauction.address,
+        subBalances.address,
       ]);
 
       await nativeswap.init(
