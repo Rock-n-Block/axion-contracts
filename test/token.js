@@ -13,8 +13,8 @@ contract(
     swapper,
     nativeSwap,
     foreignSwap,
-    dailyAuction,
-    weeklyAuction,
+    auction,
+    subbalances,
     staking,
     bigPayDay
   ]) => {
@@ -94,12 +94,11 @@ contract(
       // Call init only after swap!!!
       token.init(
         [
-          // nativeSwap, => Make the test pass but is this correct?
+          nativeSwap,
           foreignSwap,
-          dailyAuction,
-          weeklyAuction,
+          auction,
+          subbalances,
           staking,
-          bigPayDay,
         ],
         {
           from: setter,
@@ -107,13 +106,11 @@ contract(
       );
 
       const MINTER_ROLE = await token.getMinterRole();
-
-      // expect(await token.hasRole(MINTER_ROLE, nativeSwap)).equals(true); => Make the test pass but is this correct?
+      expect(await token.hasRole(MINTER_ROLE, nativeSwap)).equals(true);
       expect(await token.hasRole(MINTER_ROLE, foreignSwap)).equals(true);
-      expect(await token.hasRole(MINTER_ROLE, dailyAuction)).equals(true);
-      expect(await token.hasRole(MINTER_ROLE, weeklyAuction)).equals(true);
+      expect(await token.hasRole(MINTER_ROLE, auction)).equals(true);
+      expect(await token.hasRole(MINTER_ROLE, subbalances)).equals(true);
       expect(await token.hasRole(MINTER_ROLE, staking)).equals(true);
-      expect(await token.hasRole(MINTER_ROLE, bigPayDay)).equals(true);
     });
   }
 );
