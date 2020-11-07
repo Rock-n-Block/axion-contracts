@@ -2,6 +2,7 @@ const BN = require("bn.js");
 const chai = require("chai");
 const { expect } = require("chai");
 const helper = require("./utils/utils.js");
+const mathHelper = require("./utils/axion_helper_funcs");
 chai.use(require("chai-bn")(BN));
 
 const TERC20 = artifacts.require("TERC20");
@@ -32,7 +33,7 @@ contract("Staking", ([bank, foreignSwap, subBalances, staker1, staker2]) => {
     await staking.init(token.address, auction.address, subbalances.address, foreignSwap, DAY);
   });
 
-  it("should stake", async () => {
+  it("should stake one day", async () => {
     await token.approve(staking.address, web3.utils.toWei("10"), {
       from: staker1,
     });
@@ -43,12 +44,84 @@ contract("Staking", ([bank, foreignSwap, subBalances, staker1, staker2]) => {
 
     const sessionId = await staking.sessionsOf(staker1, 0);
     const sessionData = await staking.sessionDataOf(staker1, sessionId);
-    
+
+    const shareRate_got = await staking.shareRate();
+    expect(shareRate_got).to.be.a.bignumber.that.equals(web3.utils.toWei("1"));
     expect(sessionData.amount).to.be.a.bignumber.that.equals(
       web3.utils.toWei("10")
     );
+    expect(sessionData.shares).to.be.a.bignumber.that.equals( web3.utils.toWei("10"));
   });
+  it("should stake hundred days", async () => {
+    await token.approve(staking.address, web3.utils.toWei("10"), {
+      from: staker1,
+    });
+    const stakeAmount = 10;
+    const stakingDays = 100;
+    await staking.stake(web3.utils.toWei(stakeAmount.toString()), stakingDays, {
+      from: staker1,
+    });
 
+    const sessionId = await staking.sessionsOf(staker1, 0);
+    const sessionData = await staking.sessionDataOf(staker1, sessionId);
+
+
+    expect(sessionData.amount).to.be.a.bignumber.that.equals(
+        web3.utils.toWei(stakeAmount.toString())
+    );
+    let shares_exp = mathHelper.calc_shares(stakeAmount, stakingDays, 1.0);
+
+    const shares_got = parseFloat(web3.utils.fromWei(sessionData.shares.toString()));
+    expect(shares_got).to.be.closeTo(shares_exp, 0.001);
+    //expect(sessionData.shares).to.be.a.bignumber.that.equals( web3.utils.toWei(shares_exp.toString())
+    //);
+  });
+  it("should stake 1820 days", async () => {
+    await token.approve(staking.address, web3.utils.toWei("10"), {
+      from: staker1,
+    });
+    const stakeAmount = 10;
+    const stakingDays = 1820;
+    await staking.stake(web3.utils.toWei(stakeAmount.toString()), stakingDays, {
+      from: staker1,
+    });
+
+    const sessionId = await staking.sessionsOf(staker1, 0);
+    const sessionData = await staking.sessionDataOf(staker1, sessionId);
+
+    expect(sessionData.amount).to.be.a.bignumber.that.equals(
+        web3.utils.toWei(stakeAmount.toString())
+    );
+    let shares_exp = mathHelper.calc_shares(stakeAmount, stakingDays, 1.0);
+
+    const shares_got = parseFloat(web3.utils.fromWei(sessionData.shares.toString()));
+    expect(shares_got).to.be.closeTo(shares_exp, 0.001);
+    //expect(sessionData.shares).to.be.a.bignumber.that.equals( web3.utils.toWei(shares_exp.toString())
+    //);
+  });
+  it("should stake >1820 days", async () => {
+    await token.approve(staking.address, web3.utils.toWei("10"), {
+      from: staker1,
+    });
+    const stakeAmount = 10;
+    const stakingDays = 5555;
+    await staking.stake(web3.utils.toWei(stakeAmount.toString()), stakingDays, {
+      from: staker1,
+    });
+
+    const sessionId = await staking.sessionsOf(staker1, 0);
+    const sessionData = await staking.sessionDataOf(staker1, sessionId);
+
+    expect(sessionData.amount).to.be.a.bignumber.that.equals(
+        web3.utils.toWei(stakeAmount.toString())
+    );
+    let shares_exp = mathHelper.calc_shares(stakeAmount, stakingDays, 1.0);
+
+    const shares_got = parseFloat(web3.utils.fromWei(sessionData.shares.toString()));
+    expect(shares_got).to.be.closeTo(shares_exp, 0.001);
+    //expect(sessionData.shares).to.be.a.bignumber.that.equals( web3.utils.toWei(shares_exp.toString())
+    //);
+  });
   it("should make payout", async () => {
     await token.approve(staking.address, web3.utils.toWei("10"), {
       from: staker1,
