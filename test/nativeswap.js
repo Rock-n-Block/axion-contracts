@@ -10,14 +10,16 @@ const NativeSwap = artifacts.require("NativeSwap");
 const AuctionMock = artifacts.require("AuctionMock");
 
 const DAY = 86400;
+const STAKE_PERIOD = 350;
 
 contract(
   "NativeSwap",
   ([
     bank,
+    swapper,
     setter,
     foreignSwap,
-    weeklyAuction,
+    subBalances,
     staking,
     bigPayDay,
     account1,
@@ -25,26 +27,28 @@ contract(
     let swaptoken;
     let token;
     let nativeswap;
-    let dailyauction;
+    let auction;
 
     beforeEach(async () => {
-      swaptoken = await TERC20.new("2T Token", "2T", web3.utils.toWei("1000"), {
+      swaptoken = await TERC20.new("2T Token", "2T", web3.utils.toWei("1000"), bank, {
         from: bank,
       });
-      token = await Token.new("2X Token", "2X", swaptoken.address, setter);
-
-      swaptoken.transfer(account1, web3.utils.toWei("100"), { from: bank });
-
+      
       // Deploy and init native swap
       nativeswap = await NativeSwap.new();
 
-      dailyauction = await AuctionMock.new();
+      token = await Token.new("2X Token", "2X", swaptoken.address, nativeswap.address, setter);
+
+      swaptoken.transfer(account1, web3.utils.toWei("100"), { from: bank });
+
+      auction = await AuctionMock.new();
 
       nativeswap.init(
+        new BN(STAKE_PERIOD.toString(), 10),
         new BN(DAY.toString(), 10),
         swaptoken.address,
         token.address,
-        dailyauction.address
+        auction.address
       );
 
       // Init token
@@ -52,10 +56,9 @@ contract(
         [
           nativeswap.address,
           foreignSwap,
-          dailyauction.address,
-          weeklyAuction,
+          auction.address,
+          subBalances,
           staking,
-          bigPayDay,
         ],
         { from: setter }
       );
@@ -71,7 +74,7 @@ contract(
       });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("100"));
     });
 
@@ -85,7 +88,7 @@ contract(
       });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("100"));
 
       await nativeswap.withdraw(web3.utils.toWei("100"), {
@@ -93,7 +96,7 @@ contract(
       });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("0"));
     });
 
@@ -107,19 +110,19 @@ contract(
       });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("100"));
 
       await nativeswap.swapNativeToken({ from: account1 });
 
-      const swapTokenBalanceAccount1 = await nativeswap.getSwapTokenBalanceOf(
+      const swapTokenBalanceAccount1 = await nativeswap.swapTokenBalanceOf(
         account1
       );
 
       const tokenBalanceAccount1 = await token.balanceOf(account1);
 
-      const tokenBalanceDailyAuction = await token.balanceOf(
-        dailyauction.address
+      const tokenBalanceAuction = await token.balanceOf(
+        auction.address
       );
 
       expect(swapTokenBalanceAccount1).to.be.a.bignumber.that.equals(
@@ -130,7 +133,7 @@ contract(
         web3.utils.toWei("100")
       );
 
-      expect(tokenBalanceDailyAuction).to.be.a.bignumber.that.equals(
+      expect(tokenBalanceAuction).to.be.a.bignumber.that.equals(
         web3.utils.toWei("0")
       );
     });
@@ -145,7 +148,7 @@ contract(
       });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("100"));
 
       // Change node time and swap
@@ -153,7 +156,7 @@ contract(
       await nativeswap.swapNativeToken({ from: account1 });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("0"));
 
       expect(await token.balanceOf(account1)).to.be.a.bignumber.that.equals(
@@ -161,7 +164,7 @@ contract(
       );
 
       expect(
-        await token.balanceOf(dailyauction.address)
+        await token.balanceOf(auction.address)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("50"));
     });
 
@@ -175,7 +178,7 @@ contract(
       });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("100"));
 
       // Change node time and swap
@@ -183,7 +186,7 @@ contract(
       await nativeswap.swapNativeToken({ from: account1 });
 
       expect(
-        await nativeswap.getSwapTokenBalanceOf(account1)
+        await nativeswap.swapTokenBalanceOf(account1)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("0"));
 
       expect(await token.balanceOf(account1)).to.be.a.bignumber.that.equals(
@@ -191,7 +194,7 @@ contract(
       );
 
       expect(
-        await token.balanceOf(dailyauction.address)
+        await token.balanceOf(auction.address)
       ).to.be.a.bignumber.that.equals(web3.utils.toWei("100"));
     });
   }
