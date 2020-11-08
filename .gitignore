@@ -5,3 +5,10 @@ node_modules
 package-lock.json
 dist
 .vscode
+.DS_Store
+
+# Webstorm config
+.idea
+
+.env
+venv/

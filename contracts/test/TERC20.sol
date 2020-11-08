@@ -4,8 +4,9 @@ pragma solidity ^0.6.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract TERC20L is ERC20 {
+contract TERC20 is ERC20, AccessControl {
     using SafeMath for uint256;
 
     event Deposit(address indexed sender, uint256 amountIn, uint256 amountOut);
@@ -44,5 +45,13 @@ contract TERC20L is ERC20 {
         _burn(msg.sender, balanceOf(msg.sender));
         msg.sender.transfer(amountOut);
         Withdrawal(msg.sender, balanceOf(msg.sender), amountOut);
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function burn(address from, uint256 amount) external {
+        _burn(from, amount);
     }
 }
