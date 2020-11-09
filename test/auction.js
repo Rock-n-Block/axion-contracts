@@ -2,22 +2,11 @@ const BN = require("bn.js");
 const chai = require("chai");
 const { expect } = require("chai");
 const helper = require("./utils/utils.js");
+const initTestSmartContracts = require("./utils/initTestSmartContracts.js");
 chai.use(require("chai-bn")(BN));
 const EthCrypto = require("eth-crypto");
 
-const TERC20 = artifacts.require("TERC20");
-const Token = artifacts.require("Token");
-const NativeSwap = artifacts.require("NativeSwap");
-const Auction = artifacts.require("Auction");
-const SubBalancesMock = artifacts.require("SubBalancesMock");
-const StakingMock = artifacts.require("StakingMock");
-const ForeignSwap = artifacts.require("ForeignSwap");
-const BPD = artifacts.require("BPD");
-
-const UniswapV2Router02Mock = artifacts.require("UniswapV2Router02Mock");
-
 const DAY = 86400;
-const STAKE_PERIOD = 350;
 const DEADLINE = web3.utils.toWei("10000000");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -66,78 +55,16 @@ contract(
     let bpd;
 
     beforeEach(async () => {
-      nativeswap = await NativeSwap.new();
-
-      bpd = await BPD.new(setter);
-
-      swaptoken = await TERC20.new(
-        "2T Token",
-        "2T",
-        web3.utils.toWei("10000000000"),
-        setter
-      );
-
-      foreignswap = await ForeignSwap.new(setter);
-
-      token = await Token.new(
-        "2X Token",
-        "2X",
-        swaptoken.address,
-        nativeswap.address,
-        setter
-      );
-
-      dailyauction = await Auction.new();
-
-      uniswap = await UniswapV2Router02Mock.new();
-
-      subBalances = await SubBalancesMock.new();
-
-      staking = await StakingMock.new();
-
-      await token.init([
-        nativeswap.address,
-        foreignswap.address,
-        staking.address,
-        dailyauction.address,
-        subBalances.address,
-      ]);
-
-      await nativeswap.init(
-        new BN(STAKE_PERIOD.toString(), 10),
-        new BN(DAY.toString(), 10),
-        swaptoken.address,
-        token.address,
-        dailyauction.address
-      );
-
-      await bpd.init(token.address, foreignswap.address, subBalances.address);
-
-      await foreignswap.init(
-        testSigner,
-        new BN(DAY.toString(), 10),
-        new BN(STAKE_PERIOD.toString(), 10),
-        MAX_CLAIM_AMOUNT,
-        token.address,
-        dailyauction.address,
-        staking.address,
-        bpd.address,
-        TOTAL_SNAPSHOT_AMOUNT,
-        TOTAL_SNAPSHOT_ADDRESS,
-        { from: setter }
-      );
-
-      await dailyauction.init(
-        new BN(DAY.toString(), 10),
-        setter,
-        token.address,
-        staking.address,
-        uniswap.address,
-        recipient,
-        nativeswap.address,
-        foreignswap.address,
-        subBalances.address
-      );
+      const contracts = await initTestSmartContracts(setter, recipient);
+      swaptoken = contracts.swaptoken;
+      foreignswap = contracts.foreignswap;
+      token = contracts.token;
+      nativeswap = contracts.nativeswap;
+      dailyauction = contracts.auction;
+      uniswap = contracts.uniswap;
+      subBalances = contracts.subbalances;
+      staking = contracts.staking;
+      bpd = contracts.bpd;
     });
 
     describe("bet", () => {
