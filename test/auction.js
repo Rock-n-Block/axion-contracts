@@ -3,6 +3,7 @@ const chai = require("chai");
 const { expect } = require("chai");
 const helper = require("./utils/utils.js");
 chai.use(require("chai-bn")(BN));
+const EthCrypto = require("eth-crypto");
 
 const TERC20 = artifacts.require("TERC20");
 const Token = artifacts.require("Token");
@@ -10,6 +11,8 @@ const NativeSwap = artifacts.require("NativeSwap");
 const Auction = artifacts.require("Auction");
 const SubBalancesMock = artifacts.require("SubBalancesMock");
 const StakingMock = artifacts.require("StakingMock");
+const ForeignSwap = artifacts.require("ForeignSwap");
+const BPD = artifacts.require("BPD");
 
 const UniswapV2Router02Mock = artifacts.require("UniswapV2Router02Mock");
 
@@ -18,14 +21,34 @@ const STAKE_PERIOD = 350;
 const DEADLINE = web3.utils.toWei("10000000");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+const testSigner = web3.utils.toChecksumAddress(
+  "0xCC64d26Dab6c7B971d26846A4B2132985fe8C358"
+);
+const testSignerPriv =
+  "eaac3bee2ca2316bc2dad3f2efcc91c17cee394d45cebc8529bfa250061dac89";
+const MAX_CLAIM_AMOUNT = new BN(10 ** 7);
+const TOTAL_SNAPSHOT_AMOUNT = new BN(10 ** 10);
+const TOTAL_SNAPSHOT_ADDRESS = new BN(10);
+
+const getMessageHash = (encodeTypes, args) => {
+  let encoded = web3.eth.abi.encodeParameters(encodeTypes, args);
+  return web3.utils.soliditySha3(encoded);
+};
+
+const sign = (address, pkey, messageParamsTypes, messageParams) => {
+  const messageHash = getMessageHash(messageParamsTypes, messageParams);
+
+  return EthCrypto.sign(pkey, messageHash);
+};
+
 contract(
   "Auction",
   ([
     setter,
-    foreignSwap,
+    foreignSwapAddress,
     weeklyAuction,
-    staking,
-    bigPayDay,
+    stakingAddress,
+    bigPayDayAddress,
     recipient,
     account1,
     account2,
@@ -33,14 +56,19 @@ contract(
     account4,
   ]) => {
     let swaptoken;
+    let foreignswap;
     let token;
     let nativeswap;
     let dailyauction;
     let uniswap;
     let subBalances;
+    let staking;
+    let bpd;
 
     beforeEach(async () => {
       nativeswap = await NativeSwap.new();
+
+      bpd = await BPD.new(setter);
 
       swaptoken = await TERC20.new(
         "2T Token",
@@ -48,6 +76,8 @@ contract(
         web3.utils.toWei("10000000000"),
         setter
       );
+
+      foreignswap = await ForeignSwap.new(setter);
 
       token = await Token.new(
         "2X Token",
@@ -67,7 +97,7 @@ contract(
 
       await token.init([
         nativeswap.address,
-        foreignSwap,
+        foreignswap.address,
         staking.address,
         dailyauction.address,
         subBalances.address,
@@ -81,6 +111,22 @@ contract(
         dailyauction.address
       );
 
+      await bpd.init(token.address, foreignswap.address, subBalances.address);
+
+      await foreignswap.init(
+        testSigner,
+        new BN(DAY.toString(), 10),
+        new BN(STAKE_PERIOD.toString(), 10),
+        MAX_CLAIM_AMOUNT,
+        token.address,
+        dailyauction.address,
+        staking.address,
+        bpd.address,
+        TOTAL_SNAPSHOT_AMOUNT,
+        TOTAL_SNAPSHOT_ADDRESS,
+        { from: setter }
+      );
+
       await dailyauction.init(
         new BN(DAY.toString(), 10),
         setter,
@@ -89,7 +135,7 @@ contract(
         uniswap.address,
         recipient,
         nativeswap.address,
-        foreignSwap,
+        foreignswap.address,
         subBalances.address
       );
     });
@@ -338,6 +384,56 @@ contract(
           expect(event1.returnValues.value).to.eq("13200000000000000000");
           expect(event2.returnValues.value).to.eq("39600000000000000000");
         });
+      });
+    });
+
+    describe("big penalty amount (exceed 10M hex free claim)", () => {
+      it("should not receive big penalty amount", async () => {
+        const exceedAmount = MAX_CLAIM_AMOUNT; // 10 M
+
+        const exceedSignature = sign(
+          testSigner,
+          testSignerPriv,
+          ["uint256", "address"],
+          [exceedAmount.toString(), account1]
+        );
+
+        await foreignswap.claimFromForeign(exceedAmount, exceedSignature, {
+          from: account1,
+        });
+
+        const day6AuctionReserves = await dailyauction.reservesOf("6");
+        expect(day6AuctionReserves.token.toString()).to.eq("0");
+
+        const weeklyAuctionReserves = await dailyauction.reservesOf("7");
+        expect(weeklyAuctionReserves.token.toString()).to.eq("0");
+
+        const day8AuctionReserves = await dailyauction.reservesOf("8");
+        expect(day8AuctionReserves.token.toString()).to.eq("0");
+      });
+
+      it("should receive big penalty amount", async () => {
+        const exceedAmount = MAX_CLAIM_AMOUNT.add(new BN(1)); // 20 M
+
+        const exceedSignature = sign(
+          testSigner,
+          testSignerPriv,
+          ["uint256", "address"],
+          [exceedAmount.toString(), account1]
+        );
+
+        await foreignswap.claimFromForeign(exceedAmount, exceedSignature, {
+          from: account1,
+        });
+
+        const day6AuctionReserves = await dailyauction.reservesOf("6");
+        expect(day6AuctionReserves.token.toString()).to.eq("0");
+
+        const weeklyAuctionReserves = await dailyauction.reservesOf("7");
+        expect(weeklyAuctionReserves.token.toString()).to.eq("1");
+
+        const day8AuctionReserves = await dailyauction.reservesOf("8");
+        expect(day8AuctionReserves.token.toString()).to.eq("0");
       });
     });
   }
