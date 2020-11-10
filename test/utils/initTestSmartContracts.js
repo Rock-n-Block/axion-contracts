@@ -24,7 +24,7 @@ const MAX_CLAIM_AMOUNT = new BN(10 ** 7);
 const TOTAL_SNAPSHOT_AMOUNT = new BN(10 ** 10);
 const TOTAL_SNAPSHOT_ADDRESS = new BN(10);
 
-async function initTestSmartContracts(setter, recipient) {
+async function initTestSmartContracts(setter, recipient, stakingAddress) {
   const nativeswap = await NativeSwap.new();
 
   const bpd = await BPD.new(setter);
@@ -54,10 +54,12 @@ async function initTestSmartContracts(setter, recipient) {
 
   const staking = await StakingMock.new();
 
+  const usedStakingAddress = stakingAddress ? stakingAddress : staking.address;
+
   await token.init([
     nativeswap.address,
     foreignswap.address,
-    staking.address,
+    usedStakingAddress,
     auction.address,
     subbalances.address,
   ]);
@@ -79,7 +81,7 @@ async function initTestSmartContracts(setter, recipient) {
     MAX_CLAIM_AMOUNT,
     token.address,
     auction.address,
-    staking.address,
+    usedStakingAddress,
     bpd.address,
     TOTAL_SNAPSHOT_AMOUNT,
     TOTAL_SNAPSHOT_ADDRESS,
@@ -90,7 +92,7 @@ async function initTestSmartContracts(setter, recipient) {
     new BN(DAY.toString(), 10),
     setter,
     token.address,
-    staking.address,
+    usedStakingAddress,
     uniswap.address,
     recipient,
     nativeswap.address,
@@ -103,7 +105,7 @@ async function initTestSmartContracts(setter, recipient) {
     foreignswap.address,
     bpd.address,
     auction.address,
-    staking.address,
+    usedStakingAddress,
     new BN(DAY.toString(), 10),
     new BN(STAKE_PERIOD.toString(), 10),
     { from: setter }
